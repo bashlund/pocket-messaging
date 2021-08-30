@@ -14,47 +14,8 @@ import {
     ErrorEvent,
     MixedEvent,
     CloseEvent,
+    EventType,
 } from "./types";
-
-enum EventType {
-    /**
-     * Data event only emitted on main event emitter on new
-     * incoming messages (which are not reply messages).
-     */
-    ROUTE = "route",
-
-    /**
-     * Data event only emitted on message specific event emitters as
-     * replies on sent message.
-     */
-    REPLY = "reply",
-
-    /**
-     * Socket error event emitted on all event emitters including main.
-     */
-    ERROR = "error",
-
-    /**
-     * Socket close event emitted on all event emitters including main.
-     */
-    CLOSE = "close",
-
-    /**
-     * Message reply timeout event emitted on message specific event emitters
-     * who are awaiting replies on sent message.
-     */
-    TIMEOUT = "timeout",
-
-    /**
-     * Mixed event emitted on message specific event emitters for the events:
-     * REPLY,
-     * ERROR,
-     * CLOSE,
-     * TIMEOUT
-     * This is useful for having a catch-all event handler when waiting on replies.
-     */
-    MIXED = "mixed",
-}
 
 export class Messaging {
 
