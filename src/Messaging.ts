@@ -119,6 +119,7 @@ export class Messaging {
 
     isBusyOut: number;
     isBusyIn: number;
+    instanceId: string;
 
     constructor(socket: AbstractClient) {
         this.socket = socket;
@@ -129,6 +130,7 @@ export class Messaging {
         this.dispatchLimit = -1;
         this.isBusyOut = 0;
         this.isBusyIn = 0;
+        this.instanceId = Buffer.from(randomBytes(8)).toString("hex");
         this.incomingQueue = {
             encrypted: [],
             decrypted: [],
@@ -139,6 +141,10 @@ export class Messaging {
             encrypted: []
         };
         this.eventEmitter = new EventEmitter();
+    }
+
+    public getInstanceId(): string {
+        return this.instanceId;
     }
 
     public setEncrypted(peerPublicKey?: Buffer, keyPair?: {publicKey: Buffer, secretKey: Buffer}) {
