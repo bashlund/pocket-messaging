@@ -7,6 +7,8 @@ import {Messaging, once, Header} from "../";
 import {encrypt, decrypt} from "../src/Crypto";
 import {CreatePair, AbstractClient} from "../../pocket-sockets";
 
+const assert = require("assert");
+
 @TestSuite()
 export class MessagingSpec {
     socket1: AbstractClient;
@@ -187,5 +189,188 @@ export class MessagingSpec {
         const reply = await once(ee2a, "mixed");  // this also catched close event
         expect.toBeTrue(reply !== undefined);
         expect.toBeTrue(reply.type === "close");
+    }
+}
+
+@TestSuite()
+export class MessagingConstructor {
+    @Test()
+    public default_state() {
+        let [socket, _] = CreatePair();
+        let messaging = new Messaging(socket);
+        assert(Object.keys(messaging.pendingReply).length == 0);
+
+        assert(!messaging.isOpened);
+        assert(!messaging.isClosed);
+        assert(!messaging.useEncryption);
+
+        assert(messaging.dispatchLimit == -1);
+        assert(messaging.isBusyOut == 0);
+        assert(messaging.isBusyIn == 0);
+        assert(messaging.instanceId.length == (8 * 2));
+
+        assert(messaging.incomingQueue.encrypted.length == 0);
+        assert(messaging.incomingQueue.decrypted.length == 0);
+        assert(messaging.incomingQueue.messages.length == 0);
+
+        assert(messaging.outgoingQueue.unencrypted.length == 0);
+        assert(messaging.outgoingQueue.encrypted.length == 0);
+
+        assert(messaging.eventEmitter);
+    }
+}
+
+@TestSuite()
+export class MessagingSetEncrypted {
+    @Test()
+    public no_arguments() {
+        let [socket, _] = CreatePair();
+        let messaging = new Messaging(socket);
+        assert.throws(function() {
+            assert(!messaging.peerPublicKey);
+            assert(!messaging.keyPair);
+            assert(!messaging.useEncryption);
+            messaging.setEncrypted();
+            assert(!messaging.peerPublicKey);
+            assert(!messaging.keyPair);
+            assert(!messaging.useEncryption);
+        }, /Missing peerPublicKey and\/or keyPair for encryption./);
+    }
+
+    @Test()
+    public missing_keyPair() {
+        let [socket, _] = CreatePair();
+        let messaging = new Messaging(socket);
+        assert.throws(function() {
+            assert(!messaging.peerPublicKey);
+            assert(!messaging.keyPair);
+            assert(!messaging.useEncryption);
+            messaging.setEncrypted(Buffer.from(""));
+            assert(!messaging.peerPublicKey);
+            assert(!messaging.keyPair);
+            assert(!messaging.useEncryption);
+        }, /Missing peerPublicKey and\/or keyPair for encryption./);
+    }
+
+    @Test()
+    public missing_peerPublicKey() {
+        let [socket, _] = CreatePair();
+        let messaging = new Messaging(socket);
+        assert.throws(function() {
+            assert(!messaging.peerPublicKey);
+            assert(!messaging.keyPair);
+            assert(!messaging.useEncryption);
+            const keyPair = {
+                publicKey: Buffer.from(""),
+                secretKey: Buffer.from("")
+            };
+            messaging.setEncrypted(undefined, keyPair);
+            assert(!messaging.peerPublicKey);
+            assert(!messaging.keyPair);
+            assert(!messaging.useEncryption);
+        }, /Missing peerPublicKey and\/or keyPair for encryption./);
+    }
+
+    @Test()
+    public successful_call() {
+        let [socket, _] = CreatePair();
+        let messaging = new Messaging(socket);
+        assert.doesNotThrow(function() {
+            assert(!messaging.peerPublicKey);
+            assert(!messaging.keyPair);
+            assert(!messaging.useEncryption);
+            const keyPair = {
+                publicKey: Buffer.from(""),
+                secretKey: Buffer.from("")
+            };
+            messaging.setEncrypted(Buffer.from("dummy"), keyPair);
+            assert(messaging.peerPublicKey);
+            assert(messaging.keyPair);
+            assert(messaging.useEncryption);
+        });
+    }
+}
+
+@TestSuite()
+export class MessagingSetUnencrypted {
+    @Test()
+    public successful_call() {
+        let [socket, _] = CreatePair();
+        let messaging = new Messaging(socket);
+        assert.doesNotThrow(function() {
+            const keyPair = {
+                publicKey: Buffer.from(""),
+                secretKey: Buffer.from("")
+            };
+            messaging.setEncrypted(Buffer.from("dummy"), keyPair);
+            assert(messaging.useEncryption);
+            messaging.setUnencrypted();
+            assert(!messaging.useEncryption);
+        });
+    }
+}
+
+@TestSuite()
+export class MessagingOpen {
+    @Test()
+    public already_closed() {
+        let [socket, _] = CreatePair();
+        let messaging = new Messaging(socket);
+        assert.doesNotThrow(function() {
+            const keyPair = {
+                publicKey: Buffer.from(""),
+                secretKey: Buffer.from("")
+            };
+            messaging.isClosed = true;
+            assert(messaging.isOpened == false);
+            messaging.open();
+            assert(messaging.isOpened == false);
+        });
+    }
+
+    @Test()
+    public already_opened() {
+        let [socket, _] = CreatePair();
+        let messaging = new Messaging(socket);
+        assert.doesNotThrow(function() {
+            const keyPair = {
+                publicKey: Buffer.from(""),
+                secretKey: Buffer.from("")
+            };
+            messaging.isOpened = true;
+            let flag = false;
+            // Expected to be called only on success
+            // @ts-ignore: protected method
+            messaging.checkTimeouts = function() {
+                flag = true;
+            };
+            messaging.open();
+            assert(messaging.isOpened == true);
+            assert(flag == false); // No change
+        });
+    }
+
+    @Test()
+    public successful_call() {
+        let [socket, _] = CreatePair();
+        let messaging = new Messaging(socket);
+        assert.doesNotThrow(function() {
+            const keyPair = {
+                publicKey: Buffer.from(""),
+                secretKey: Buffer.from("")
+            };
+            let flag = false;
+            // Expected to be called only on success
+            // @ts-ignore: protected method
+            messaging.checkTimeouts = function() {
+                flag = true;
+            };
+            assert(messaging.isOpened == false);
+            assert(flag == false);
+            messaging.open();
+            assert(messaging.isOpened == true);
+            // @ts-ignore: expected to be modified by custom checkTimeouts
+            assert(flag == true);
+        });
     }
 }
