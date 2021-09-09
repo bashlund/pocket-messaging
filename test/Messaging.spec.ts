@@ -374,3 +374,177 @@ export class MessagingOpen {
         });
     }
 }
+
+@TestSuite()
+export class MessagingClose {
+    @Test()
+    public already_closed() {
+        let [socket, _] = CreatePair();
+        let messaging = new Messaging(socket);
+        assert.doesNotThrow(function() {
+            const keyPair = {
+                publicKey: Buffer.from(""),
+                secretKey: Buffer.from("")
+            };
+            let flag = false;
+            messaging.socket.close = function() {
+                flag = true;
+            }
+            messaging.isClosed = true;
+            assert(flag == false);
+            messaging.close();
+            assert(flag == false);
+        });
+    }
+
+    // TODO: FIXME: public close procedure never toggles isClosed ?
+    @Test()
+    public successful_call() {
+        let [socket, _] = CreatePair();
+        let messaging = new Messaging(socket);
+        assert.doesNotThrow(function() {
+            const keyPair = {
+                publicKey: Buffer.from(""),
+                secretKey: Buffer.from("")
+            };
+            let flag = false;
+            messaging.socket.close = function() {
+                flag = true;
+            }
+            assert(messaging.isClosed == false);
+            assert(flag == false);
+            messaging.close();
+            assert(messaging.isClosed == true);
+            //@ts-ignore: expected to be changed by custom socket.close
+            assert(flag == true);
+        });
+    }
+}
+
+@TestSuite()
+export class MessagingCorkUncork {
+    @Test()
+    public successful_call() {
+        let [socket, _] = CreatePair();
+        let messaging = new Messaging(socket);
+        assert.doesNotThrow(function() {
+            const keyPair = {
+                publicKey: Buffer.from(""),
+                secretKey: Buffer.from("")
+            };
+            messaging.uncork(30);
+            assert(messaging.dispatchLimit == 30);
+            messaging.cork();
+            assert(messaging.dispatchLimit == 0);
+        });
+    }
+
+    @Test()
+    public uncork_without_parameters() {
+        let [socket, _] = CreatePair();
+        let messaging = new Messaging(socket);
+        assert.doesNotThrow(function() {
+            const keyPair = {
+                publicKey: Buffer.from(""),
+                secretKey: Buffer.from("")
+            };
+            assert(messaging.dispatchLimit == -1);
+            messaging.uncork(30);
+            assert(messaging.dispatchLimit == 30);
+            messaging.uncork();
+            assert(messaging.dispatchLimit == -1);
+        });
+    }
+}
+
+@TestSuite()
+export class MessagingSend {
+    @Test()
+    public not_open_noop() {
+        let [socket, _] = CreatePair();
+        let messaging = new Messaging(socket);
+        assert.doesNotThrow(function() {
+            const keyPair = {
+                publicKey: Buffer.from(""),
+                secretKey: Buffer.from("")
+            };
+            assert(messaging.isOpened == false);
+            assert(Object.keys(messaging.pendingReply).length == 0);
+            messaging.send(Buffer.from(""));
+            assert(Object.keys(messaging.pendingReply).length == 0);
+        });
+    }
+
+    @Test()
+    public isClosed_noop() {
+        let [socket, _] = CreatePair();
+        let messaging = new Messaging(socket);
+        assert.doesNotThrow(function() {
+            const keyPair = {
+                publicKey: Buffer.from(""),
+                secretKey: Buffer.from("")
+            };
+            messaging.isClosed = true;
+            assert(Object.keys(messaging.pendingReply).length == 0);
+            messaging.send(Buffer.from(""));
+            assert(Object.keys(messaging.pendingReply).length == 0);
+        });
+    }
+
+    @Test()
+    public exceed_target_length() {
+        let [socket, _] = CreatePair();
+        let messaging = new Messaging(socket);
+        assert.throws(function() {
+            const keyPair = {
+                publicKey: Buffer.from(""),
+                secretKey: Buffer.from("")
+            };
+            assert(Object.keys(messaging.pendingReply).length == 0);
+            messaging.isOpened = true;
+            messaging.isClosed = false;
+            messaging.send(Buffer.alloc(256).fill(256));
+            assert(Object.keys(messaging.pendingReply).length == 0);
+        }, /target length cannot exceed 255 bytes/);
+    }
+
+    @Test()
+    public successful_call_no_reply() {
+        let [socket, _] = CreatePair();
+        let messaging = new Messaging(socket);
+        assert.doesNotThrow(function() {
+            const keyPair = {
+                publicKey: Buffer.from(""),
+                secretKey: Buffer.from("")
+            };
+            assert(messaging.outgoingQueue.unencrypted.length == 0);
+            assert(Object.keys(messaging.pendingReply).length == 0);
+            messaging.isOpened = true;
+            messaging.isClosed = false;
+            const replyStatus = messaging.send(Buffer.alloc(255).fill(255));
+            assert(messaging.outgoingQueue.unencrypted.length == 1 + 1);
+            assert(Object.keys(messaging.pendingReply).length == 0);
+            assert(replyStatus == undefined);
+        });
+    }
+
+    @Test()
+    public successful_call_expectingReply() {
+        let [socket, _] = CreatePair();
+        let messaging = new Messaging(socket);
+        assert.doesNotThrow(function() {
+            const keyPair = {
+                publicKey: Buffer.from(""),
+                secretKey: Buffer.from("")
+            };
+            assert(messaging.outgoingQueue.unencrypted.length == 0);
+            assert(Object.keys(messaging.pendingReply).length == 0);
+            messaging.isOpened = true;
+            messaging.isClosed = false;
+            const replyStatus = messaging.send(Buffer.alloc(255).fill(255), undefined, 1);
+            assert(messaging.outgoingQueue.unencrypted.length == 1 + 1);
+            assert(Object.keys(messaging.pendingReply).length == 1);
+            assert(replyStatus instanceof EventEmitter);
+        });
+    }
+}
