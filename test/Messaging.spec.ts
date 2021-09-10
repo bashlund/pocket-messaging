@@ -3,7 +3,7 @@ import nacl from "tweetnacl";
 
 import EventEmitter from "eventemitter3";
 
-import {Messaging, once, Header} from "../";
+import {Messaging, once, Header, EventType} from "../";
 import {encrypt, decrypt} from "../src/Crypto";
 import {CreatePair, AbstractClient} from "../../pocket-sockets";
 
@@ -545,6 +545,333 @@ export class MessagingSend {
             assert(messaging.outgoingQueue.unencrypted.length == 1 + 1);
             assert(Object.keys(messaging.pendingReply).length == 1);
             assert(replyStatus instanceof EventEmitter);
+        });
+    }
+}
+
+@TestSuite()
+export class MessagingEncodeHeader {
+    @Test()
+    public target_length_exceeded() {
+        let [socket, _] = CreatePair();
+        let messaging = new Messaging(socket);
+        assert.throws(function() {
+            const keyPair = {
+                publicKey: Buffer.from(""),
+                secretKey: Buffer.from("")
+            };
+            //@ts-ignore protected function
+            const id = messaging.generateMsgId();
+            const header: Header = {
+                version: 0,
+                target: Buffer.alloc(256).fill(256),
+                msgId: id,
+                dataLength: 33,
+                config: 2
+            };
+            //@ts-ignore protected function
+            messaging.encodeHeader(header);
+        }, /Target length cannot exceed 255 bytes./);
+    }
+
+    @Test()
+    public msgId_length_exceeded() {
+        let [socket, _] = CreatePair();
+        let messaging = new Messaging(socket);
+        assert.throws(function() {
+            const keyPair = {
+                publicKey: Buffer.from(""),
+                secretKey: Buffer.from("")
+            };
+            const header: Header = {
+                version: 0,
+                target: Buffer.alloc(255).fill(255),
+                msgId: Buffer.from(""),
+                dataLength: 33,
+                config: 2
+            };
+            //@ts-ignore protected function
+            messaging.encodeHeader(header);
+        }, /msgId length must be exactly 4 bytes long./);
+    }
+}
+
+@TestSuite()
+export class MessagingDecodeHeader {
+    @Test()
+    public unsupported_version() {
+        let [socket, _] = CreatePair();
+        let messaging = new Messaging(socket);
+        assert.throws(function() {
+            const keyPair = {
+                publicKey: Buffer.from(""),
+                secretKey: Buffer.from("")
+            };
+            //@ts-ignore protected function
+            const id = messaging.generateMsgId();
+            const header: Header = {
+                version: 0,
+                target: Buffer.alloc(255).fill(255),
+                msgId: id,
+                dataLength: 33,
+                config: 2
+            };
+            //@ts-ignore protected function
+            let encodedHeader = messaging.encodeHeader(header);
+            encodedHeader.writeUInt8(255);
+            //@ts-ignore protected function
+            messaging.decodeHeader(encodedHeader);
+        }, /Unexpected version nr. Only supporting version 0./);
+    }
+
+    @Test()
+    public buffer_length_mismatch() {
+        let [socket, _] = CreatePair();
+        let messaging = new Messaging(socket);
+        assert.throws(function() {
+            const keyPair = {
+                publicKey: Buffer.from(""),
+                secretKey: Buffer.from("")
+            };
+            //@ts-ignore protected function
+            const id = messaging.generateMsgId();
+            const header: Header = {
+                version: 0,
+                target: Buffer.alloc(255).fill(255),
+                msgId: id,
+                dataLength: 33,
+                config: 2
+            };
+            //@ts-ignore protected function
+            let encodedHeader = messaging.encodeHeader(header);
+            encodedHeader.writeUInt32LE(234, 1);
+            //@ts-ignore protected function
+            messaging.decodeHeader(encodedHeader);
+        }, /Mismatch in expected length and provided buffer length./);
+    }
+}
+
+@TestSuite()
+export class MessagingSocketClose {
+    @Test()
+    public alreadyClosed_noop() {
+        let [socket, _] = CreatePair();
+        let messaging = new Messaging(socket);
+        assert.doesNotThrow(function() {
+            const keyPair = {
+                publicKey: Buffer.from(""),
+                secretKey: Buffer.from("")
+            };
+            messaging.isClosed = true;
+            //@ts-ignore protected function
+            messaging.socketClose();
+            assert(messaging.isClosed == true);
+        });
+    }
+
+    @Test()
+    public successful_call() {
+        let [socket, _] = CreatePair();
+        let messaging = new Messaging(socket);
+        assert.doesNotThrow(function() {
+            const keyPair = {
+                publicKey: Buffer.from(""),
+                secretKey: Buffer.from("")
+            };
+            //@ts-ignore protected function
+            messaging.emitEvent = function(emitters: EventEmitter[], type: EventType, arg: any) {
+                assert(emitters)
+                assert(type == EventType.CLOSE || type == EventType.MIXED);
+                assert(arg);
+            };
+            assert(messaging.isClosed == false);
+            //@ts-ignore protected function
+            messaging.socketClose();
+            assert(messaging.isClosed == true);
+        });
+    }
+}
+
+@TestSuite()
+export class MessagingSocketData {
+    @Test()
+    public successful_call() {
+        let [socket, _] = CreatePair();
+        let messaging = new Messaging(socket);
+        assert.doesNotThrow(function() {
+            const keyPair = {
+                publicKey: Buffer.from(""),
+                secretKey: Buffer.from("")
+            };
+
+            let flag = false;
+            //@ts-ignore custom signature
+            messaging.processInqueue = function() {
+                flag = true;
+            }
+            assert(messaging.incomingQueue.encrypted.length == 0);
+            assert(messaging.isBusyIn == 0);
+            assert(flag == false);
+            //@ts-ignore protected function
+            messaging.socketData(Buffer.from(""));
+            assert(messaging.incomingQueue.encrypted.length == 1);
+            assert(messaging.isBusyIn == 1);
+            //@ts-ignore: expected to be changed by custom processInqueue
+            assert(flag == true);
+        });
+    }
+}
+
+@TestSuite()
+export class MessagingProcessInqueue {
+    @Test()
+    public not_busy_noop() {
+        let [socket, _] = CreatePair();
+        let messaging = new Messaging(socket);
+        assert.doesNotThrow(function() {
+            const keyPair = {
+                publicKey: Buffer.from(""),
+                secretKey: Buffer.from("")
+            };
+
+            let flag = false;
+            //@ts-ignore custom signature
+            messaging.decryptIncoming = function() {
+                flag = true;
+            }
+            assert(flag == false);
+            messaging.isBusyIn = 0;
+            //@ts-ignore protected function
+            messaging.processInqueue();
+            assert(messaging.isBusyIn == 0);
+            assert(flag == false);
+        });
+    }
+
+    @Test()
+    public successful_call() {
+        let [socket, _] = CreatePair();
+        let messaging = new Messaging(socket);
+        assert.doesNotThrow(async function() {
+            const keyPair = {
+                publicKey: Buffer.from(""),
+                secretKey: Buffer.from("")
+            };
+
+            let counter = 0;
+            //@ts-ignore custom signature
+            messaging.decryptIncoming = function() {
+                counter++;
+            }
+            //@ts-ignore custom signature
+            messaging.assembleIncoming = function() {
+                counter++;
+            }
+            //@ts-ignore custom signature
+            messaging.dispatchIncoming = function() {
+                counter++;
+            }
+            messaging.isBusyIn = 1;
+            //@ts-ignore protected function
+            await messaging.processInqueue();
+            assert(counter == 3);
+        });
+    }
+}
+
+@TestSuite()
+export class MessagingDecryptIncoming {
+    @Test()
+    public unencrypted() {
+        let [socket, _] = CreatePair();
+        let messaging = new Messaging(socket);
+        assert.doesNotThrow(async function() {
+            const keyPair = {
+                publicKey: Buffer.from(""),
+                secretKey: Buffer.from("")
+            };
+
+            messaging.useEncryption = false;
+            messaging.incomingQueue.encrypted.push(Buffer.from(""));
+
+            assert(messaging.incomingQueue.encrypted.length == 1);
+            assert(messaging.incomingQueue.decrypted.length == 0);
+            //@ts-ignore protected function
+            messaging.decryptIncoming();
+            assert(messaging.incomingQueue.encrypted.length == 0);
+            assert(messaging.incomingQueue.decrypted.length == 1);
+        });
+    }
+
+    @Test()
+    public encrypted_missing_peerPublicKey_noop() {
+        let [socket, _] = CreatePair();
+        let messaging = new Messaging(socket);
+        assert.doesNotThrow(async function() {
+            const keyPair = {
+                publicKey: Buffer.from(""),
+                secretKey: Buffer.from("")
+            };
+
+            messaging.setEncrypted(Buffer.from("dummy"), keyPair);
+            messaging.peerPublicKey = undefined;
+            messaging.useEncryption = true;
+            messaging.incomingQueue.encrypted.push(Buffer.from(""));
+
+            assert(messaging.incomingQueue.encrypted.length == 1);
+            assert(messaging.incomingQueue.decrypted.length == 0);
+            //@ts-ignore protected function
+            messaging.decryptIncoming();
+            assert(messaging.incomingQueue.encrypted.length == 1);
+            assert(messaging.incomingQueue.decrypted.length == 0);
+        });
+    }
+
+    @Test()
+    public encrypted_missing_keyPair_secretKey_noop() {
+        let [socket, _] = CreatePair();
+        let messaging = new Messaging(socket);
+        assert.doesNotThrow(async function() {
+            const keyPair = {
+                publicKey: Buffer.from(""),
+                secretKey: Buffer.from("")
+            };
+
+            messaging.setEncrypted(Buffer.from("dummy"), keyPair);
+            //@ts-ignore: force undefined
+            messaging.keyPair!.secretKey = undefined;
+            messaging.useEncryption = true;
+            messaging.incomingQueue.encrypted.push(Buffer.from(""));
+
+            assert(messaging.incomingQueue.encrypted.length == 1);
+            assert(messaging.incomingQueue.decrypted.length == 0);
+            //@ts-ignore protected function
+            messaging.decryptIncoming();
+            assert(messaging.incomingQueue.encrypted.length == 1);
+            assert(messaging.incomingQueue.decrypted.length == 0);
+        });
+    }
+
+    @Test()
+    public encrypted_data_not_ready() {
+        let [socket, _] = CreatePair();
+        let messaging = new Messaging(socket);
+        assert.doesNotThrow(async function() {
+            const keyPair = {
+                publicKey: Buffer.from(""),
+                secretKey: Buffer.from("")
+            };
+
+            messaging.setEncrypted(Buffer.from("dummy"), keyPair);
+            messaging.useEncryption = true;
+            messaging.incomingQueue.encrypted.push(Buffer.from(""));
+
+            assert(messaging.incomingQueue.encrypted.length == 1);
+            assert(messaging.incomingQueue.decrypted.length == 0);
+            //@ts-ignore protected function
+            messaging.decryptIncoming();
+            assert(messaging.incomingQueue.encrypted.length == 1);
+            assert(messaging.incomingQueue.decrypted.length == 0);
         });
     }
 }
