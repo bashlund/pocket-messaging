@@ -170,6 +170,7 @@ export class Messaging {
         if (this.isClosed) {
             return;
         }
+        this.isClosed = true;
         this.socket.close();
     }
 
@@ -579,7 +580,7 @@ export class Messaging {
         this.isBusyOut--;
         await this.encryptOutgoing();
         this.dispatchOutgoing();
-        this.processOutqueue();  // In case isBusyOut counter got increated
+        this.processOutqueue();  // In case isBusyOut counter got increased
     }
 
     /**
