@@ -3,7 +3,7 @@ import nacl from "tweetnacl";
 
 import EventEmitter from "eventemitter3";
 
-import {Messaging, once, Header, EventType} from "../";
+import {Messaging, once, Header, EventType, SentMessage, TimeoutEvent} from "../";
 import {encrypt, decrypt} from "../src/Crypto";
 import {CreatePair, AbstractClient} from "../../pocket-sockets";
 
@@ -99,22 +99,6 @@ export class MessagingSpec {
         if (!extracted) return; //@ts-chillax trust me on this one
         expect.toBeTrue(extracted.compare(Buffer.from("bcdef")) === 0);
         expect.toBeTrue(buffers.length === 0);
-    }
-
-    @Test()
-    public encryption() {
-        const keyPair = nacl.box.keyPair();
-        const keyPairPeer = nacl.box.keyPair();
-        const peerPublicKey = keyPairPeer.publicKey;
-        const message = Buffer.from("Hello World");
-        const encrypted = encrypt(message, Buffer.from(peerPublicKey), Buffer.from(keyPair.secretKey));
-        expect.toBeTrue(encrypted !== undefined);
-        expect.toBeTrue(encrypted.toString() !== "Hello World");
-        const decrypted = decrypt(encrypted, Buffer.from(peerPublicKey), Buffer.from(keyPair.secretKey));
-        expect.toBeTrue(decrypted !== undefined);
-        //@ts-chillax
-        if (!decrypted) return;
-        expect.toBeTrue(decrypted.toString() === "Hello World");
     }
 
     /**
@@ -1286,6 +1270,156 @@ export class MessagingEncryptOutgoing {
             await messaging.encryptOutgoing();
             assert(messaging.outgoingQueue.unencrypted.length == 0);
             assert(messaging.outgoingQueue.encrypted.length == 2);
+        });
+    }
+}
+
+@TestSuite()
+export class MessagingDispatchOutgoing {
+    @Test()
+    public no_encrypted_data_noop() {
+        let [socket, _] = CreatePair();
+        let messaging = new Messaging(socket);
+        assert.doesNotThrow(async function() {
+            assert(messaging.outgoingQueue.encrypted.length == 0);
+            //@ts-ignore: protected function
+            await messaging.dispatchOutgoing();
+            assert(messaging.outgoingQueue.encrypted.length == 0);
+        });
+    }
+
+    @Test()
+    public successful_call() {
+        let [socket, _] = CreatePair();
+        let messaging = new Messaging(socket);
+        assert.doesNotThrow(async function() {
+            const kp = nacl.box.keyPair();
+            const keyPairPeer = nacl.box.keyPair();
+            const peerPublicKey = keyPairPeer.publicKey;
+            const keyPair = {
+                publicKey: Buffer.from(kp.publicKey),
+                secretKey: Buffer.from(kp.secretKey)
+            };
+            messaging.isOpened = true;
+            messaging.isClosed = false;
+            messaging.setEncrypted(Buffer.from(peerPublicKey), keyPair);
+            const replyStatus = messaging.send(Buffer.alloc(255).fill(255));
+            //@ts-ignore: protected function
+            await messaging.encryptOutgoing();
+
+            let flag = false;
+            messaging.socket.send = function() {
+                flag = true;
+            }
+            assert(flag == false);
+            assert(messaging.outgoingQueue.encrypted.length == 2);
+            //@ts-ignore: protected function
+            await messaging.dispatchOutgoing();
+            //@ts-ignore: flag expected to be toggled by custom socket send procedure
+            assert(flag == true);
+            assert(messaging.outgoingQueue.encrypted.length == 0);
+        });
+    }
+}
+
+@TestSuite()
+export class MessagingCheckTimeouts {
+    @Test()
+    public unset_isOpened_noop() {
+        let [socket, _] = CreatePair();
+        let messaging = new Messaging(socket);
+        assert.doesNotThrow(async function() {
+            messaging.isOpened = false;
+            //@ts-ignore: protected function
+            await messaging.checkTimeouts();
+        });
+    }
+
+    @Test()
+    public set_isClosed_noop() {
+        let [socket, _] = CreatePair();
+        let messaging = new Messaging(socket);
+        assert.doesNotThrow(async function() {
+            messaging.isClosed = true;
+            //@ts-ignore: protected function
+            await messaging.checkTimeouts();
+        });
+    }
+
+    @Test()
+    public successful_call() {
+        let [socket, _] = CreatePair();
+        let messaging = new Messaging(socket);
+        assert.doesNotThrow(async function() {
+            messaging.isOpened = true;
+            messaging.isClosed = false;
+            //@ts-ignore: protected function
+            messaging.getTimeoutedPendingMessages = function() {
+                let messages: SentMessage[] = [];
+                messages.push({
+                    timestamp: 0,
+                    msgId: Buffer.from("10"),
+                    timeout: 0,
+                    stream: false,
+                    eventEmitter: new EventEmitter()
+                });
+                return messages;
+            }
+            messaging.cancelPendingMessage = function(id: Buffer) {
+                assert(id.toString() == "10");
+            }
+            //@ts-ignore: protected function
+            messaging.emitEvent = function(emitter: EventEmitter[], type: EventType, timeout: TimeoutEvent) {
+                assert(type == EventType.TIMEOUT);
+            }
+            //@ts-ignore: protected function
+            messaging.checkTimeouts();
+            messaging.close();
+        });
+    }
+}
+
+@TestSuite()
+export class MessagingGetTimeoutedPendingMessages {
+    @Test()
+    public successful_call_timeout() {
+        let [socket, _] = CreatePair();
+        let messaging = new Messaging(socket);
+        assert.doesNotThrow(async function() {
+            messaging.isOpened = true;
+            messaging.isClosed = false;
+            //@ts-ignore: protected function
+            messaging.pendingReply["20"] = {
+                timestamp: 0,
+                msgId: Buffer.from("20"),
+                timeout: 1,
+                stream: false,
+                eventEmitter: new EventEmitter()
+            };
+            //@ts-ignore: protected function
+            let data = messaging.getTimeoutedPendingMessages();
+            assert(data.length == 1);
+        });
+    }
+
+    @Test()
+    public successful_call_no_timeout() {
+        let [socket, _] = CreatePair();
+        let messaging = new Messaging(socket);
+        assert.doesNotThrow(async function() {
+            messaging.isOpened = true;
+            messaging.isClosed = false;
+            //@ts-ignore: protected function
+            messaging.pendingReply["20"] = {
+                timestamp: 0,
+                msgId: Buffer.from("20"),
+                timeout: 0,
+                stream: false,
+                eventEmitter: new EventEmitter()
+            };
+            //@ts-ignore: protected function
+            let data = messaging.getTimeoutedPendingMessages();
+            assert(data.length == 0);
         });
     }
 }
