@@ -5,14 +5,14 @@ import EventEmitter from "eventemitter3";
 
 import {Messaging, once, Header, EventType, SentMessage, TimeoutEvent} from "../";
 import {encrypt, decrypt} from "../src/Crypto";
-import {CreatePair, AbstractClient} from "../../pocket-sockets";
+import {CreatePair, Client} from "../../pocket-sockets";
 
 const assert = require("assert");
 
 @TestSuite()
 export class MessagingSpec {
-    socket1: AbstractClient;
-    socket2: AbstractClient;
+    socket1: Client;
+    socket2: Client;
     messaging1: Messaging;
     messaging2: Messaging;
     eventEmitter1: EventEmitter;

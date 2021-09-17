@@ -1,4 +1,4 @@
-import {AbstractClient} from "../../pocket-sockets";
+import {Client} from "../../pocket-sockets";
 import EventEmitter from "eventemitter3";
 import {encrypt, decrypt, randomBytes} from "./Crypto";
 
@@ -44,7 +44,7 @@ export class Messaging {
     /**
      * The given client socket to communicate with.
      */
-    socket: AbstractClient;
+    socket: Client;
 
     /**
      * Set to true if we have opened.
@@ -82,7 +82,7 @@ export class Messaging {
     isBusyIn: number;
     instanceId: string;
 
-    constructor(socket: AbstractClient) {
+    constructor(socket: Client) {
         this.socket = socket;
         this.pendingReply = {};
         this.isOpened = false;
