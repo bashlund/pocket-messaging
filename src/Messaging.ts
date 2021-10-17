@@ -1,6 +1,6 @@
 import {Client} from "../../pocket-sockets";
 import EventEmitter from "eventemitter3";
-import {encrypt, decrypt, randomBytes} from "./Crypto";
+import {box, unbox, randomBytes} from "./Crypto";
 
 import {
     SentMessage,
@@ -57,19 +57,15 @@ export class Messaging {
     isClosed: boolean;
 
     /**
-     * Set to true to have streams encrypted/decrypted
+     * Setting this activates encryption.
      */
-    useEncryption: boolean;
-
-    /**
-     * The peer public key used for encryption
-     */
-    peerPublicKey?: Buffer;
-
-    /**
-     * Our public and secret key pair used for encryption.
-     */
-    keyPair?: {publicKey: Buffer, secretKey: Buffer};
+    encryptionKeys?: {
+        outgoingKey: Buffer,
+        outgoingNonce: Buffer,
+        incomingKey: Buffer,
+        incomingNonce: Buffer,
+        peerPublicKey: Buffer
+    };
 
     /**
      * How many messages we allow through.
@@ -87,7 +83,6 @@ export class Messaging {
         this.pendingReply = {};
         this.isOpened = false;
         this.isClosed = false;
-        this.useEncryption = false;
         this.dispatchLimit = -1;
         this.isBusyOut = 0;
         this.isBusyIn = 0;
@@ -108,23 +103,41 @@ export class Messaging {
         return this.instanceId;
     }
 
-    public setEncrypted(peerPublicKey?: Buffer, keyPair?: {publicKey: Buffer, secretKey: Buffer}) {
-        if (peerPublicKey) {
-            this.peerPublicKey = peerPublicKey;
-        }
-        if (keyPair) {
-            this.keyPair = keyPair;
-        }
-
-        if (!this.peerPublicKey || !this.keyPair) {
-            throw "Missing peerPublicKey and/or keyPair for encryption.";
-        }
-
-        this.useEncryption = true;
+    public setEncrypted(outgoingKey: Buffer, outgoingNonce: Buffer, incomingKey: Buffer, incomingNonce: Buffer, peerPublicKey: Buffer) {
+        this.encryptionKeys = {
+            outgoingKey,
+            outgoingNonce,
+            incomingKey,
+            incomingNonce,
+            peerPublicKey,
+        };
     }
 
+    public getPeerPublicKey(): Buffer | undefined {
+        return this.encryptionKeys?.peerPublicKey || undefined;
+    }
+
+    //public setEncrypted(peerPublicKey?: Buffer, keyPair?: {publicKey: Buffer, secretKey: Buffer}) {
+        //if (peerPublicKey) {
+            //this.peerPublicKey = peerPublicKey;
+        //}
+        //if (keyPair) {
+            //this.keyPair = keyPair;
+        //}
+
+        //if (!this.peerPublicKey || !this.keyPair) {
+            //throw "Missing peerPublicKey and/or keyPair for encryption.";
+        //}
+
+        //this.useEncryption = true;
+    //}
+
+    //public static GenerateKeyPair(): KeyPair {
+        //return nacl.box.keyPair();
+    //}
+
     public setUnencrypted() {
-        this.useEncryption = false;
+        this.encryptionKeys = undefined;
     }
 
     /**
@@ -167,10 +180,12 @@ export class Messaging {
      *
      */
     public close() {
+        if (!this.isOpened) {
+            return;
+        }
         if (this.isClosed) {
             return;
         }
-        this.isClosed = true;
         this.socket.close();
     }
 
@@ -192,6 +207,10 @@ export class Messaging {
         }
 
         data = data ?? Buffer.alloc(0);
+
+        if (data.length > 65535) {
+            throw "Data chunk to send cannot exceed 65525 bytes";
+        }
 
         const msgId = this.generateMsgId();
 
@@ -418,34 +437,37 @@ export class Messaging {
      * Decrypt buffers in the inqueue and move them to the dispatch queue.
      */
     protected decryptIncoming = async () => {
-        if (this.useEncryption) {
-            //@ts-chillax
-            if (!this.peerPublicKey || !this.keyPair?.secretKey) {
-                console.error("Missing crypto configuration");
-                return;
-            }
-
+        if (this.encryptionKeys) {
+            let chunk = Buffer.alloc(0);
             while (this.incomingQueue.encrypted.length > 0) {
-                if (this.incomingQueue.encrypted[0].length < 4) {
-                    // Not enough data ready
-                    return;
+                if (this.incomingQueue.encrypted.length > 0) {
+                    const b = this.incomingQueue.encrypted.shift();
+                    if (b) {
+                        chunk = Buffer.concat([chunk, b]);
+                    }
                 }
-                const length = this.incomingQueue.encrypted[0].readUInt32LE(0);
-
-                const chunk = this.extractBuffer(this.incomingQueue.encrypted, length);
-                if (!chunk) {
-                    // Not enough data ready
-                    return;
+                else if (chunk.length === 0) {
+                    break;
                 }
 
                 // TODO: this we should do in a separate thread
-                const decrypted = decrypt(chunk, this.peerPublicKey, this.keyPair.secretKey);
-                if (!decrypted) {
-                    console.error("Cannot decrypt stream. Closing.");
-                    this.close();
-                    return;
+                //const decrypted = decrypt(chunk, this.peerPublicKey, this.keyPair.secretKey);
+                const ret = unbox(chunk, this.encryptionKeys.incomingNonce, this.encryptionKeys.incomingKey);
+                if (!ret) {
+                    // Not enough data in chunk
+                    if (this.incomingQueue.encrypted.length === 0) {
+                        break;
+                    }
+                    continue;
                 }
+                const [decrypted, nextNonce, bytesConsumed] = ret;
+                this.encryptionKeys.incomingNonce = nextNonce;
                 this.incomingQueue.decrypted.push(decrypted);
+                chunk = chunk.slice(bytesConsumed);
+            }
+            if (chunk.length > 0) {
+                // Data rest, put ut back to queue
+                this.incomingQueue.encrypted.unshift(chunk);
             }
         }
         else {
@@ -560,6 +582,7 @@ export class Messaging {
                     // Note that if this is a reply event on a removed pending
                     // message then the reply will get routed on the main
                     // event emitter (but likely then ignored).
+                    // TODO: add alphanumric check on target string
                     const routeEvent: RouteEvent = {
                         target: inMessage.target.toString(),
                         fromMsgId: inMessage.msgId,
@@ -587,20 +610,18 @@ export class Messaging {
      * Encrypt and move buffer (or just move buffers if not using encryption) to the next out queue.
      */
     protected encryptOutgoing = async () => {
-        if (this.useEncryption) {
-            //@ts-chillax
-            if (!this.keyPair?.secretKey || !this.peerPublicKey) {
-                console.error("Crypto malconfigured");
-                return;
-            }
+        if (this.encryptionKeys) {
             while (this.outgoingQueue.unencrypted.length > 0) {
                 const chunk = this.outgoingQueue.unencrypted.shift();
-                //@ts-chillax
                 if (!chunk) {
                     continue;
                 }
                 // TODO: here we should use another thread to do the heavy work.
-                const encrypted = encrypt(chunk, this.peerPublicKey, this.keyPair.secretKey);
+                //const encrypted = encrypt(chunk, this.peerPublicKey, this.keyPair.secretKey);
+                const [encrypted, nextNonce] = box(chunk,
+                                                   this.encryptionKeys.outgoingNonce,
+                                                   this.encryptionKeys.outgoingKey);
+                this.encryptionKeys.outgoingNonce = nextNonce;
                 this.outgoingQueue.encrypted.push(encrypted);
             }
         }

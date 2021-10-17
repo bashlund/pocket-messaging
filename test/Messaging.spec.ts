@@ -4,7 +4,6 @@ import nacl from "tweetnacl";
 import EventEmitter from "eventemitter3";
 
 import {Messaging, once, Header, EventType, SentMessage, TimeoutEvent} from "../";
-import {encrypt, decrypt} from "../src/Crypto";
 import {CreatePair, Client} from "../../pocket-sockets";
 
 const assert = require("assert");
@@ -186,7 +185,7 @@ export class MessagingConstructor {
 
         assert(!messaging.isOpened);
         assert(!messaging.isClosed);
-        assert(!messaging.useEncryption);
+        assert(!messaging.encryptionKeys);
 
         assert(messaging.dispatchLimit == -1);
         assert(messaging.isBusyOut == 0);
@@ -207,70 +206,20 @@ export class MessagingConstructor {
 @TestSuite()
 export class MessagingSetEncrypted {
     @Test()
-    public no_arguments() {
-        let [socket, _] = CreatePair();
-        let messaging = new Messaging(socket);
-        assert.throws(function() {
-            assert(!messaging.peerPublicKey);
-            assert(!messaging.keyPair);
-            assert(!messaging.useEncryption);
-            messaging.setEncrypted();
-            assert(!messaging.peerPublicKey);
-            assert(!messaging.keyPair);
-            assert(!messaging.useEncryption);
-        }, /Missing peerPublicKey and\/or keyPair for encryption./);
-    }
-
-    @Test()
-    public missing_keyPair() {
-        let [socket, _] = CreatePair();
-        let messaging = new Messaging(socket);
-        assert.throws(function() {
-            assert(!messaging.peerPublicKey);
-            assert(!messaging.keyPair);
-            assert(!messaging.useEncryption);
-            messaging.setEncrypted(Buffer.from(""));
-            assert(!messaging.peerPublicKey);
-            assert(!messaging.keyPair);
-            assert(!messaging.useEncryption);
-        }, /Missing peerPublicKey and\/or keyPair for encryption./);
-    }
-
-    @Test()
-    public missing_peerPublicKey() {
-        let [socket, _] = CreatePair();
-        let messaging = new Messaging(socket);
-        assert.throws(function() {
-            assert(!messaging.peerPublicKey);
-            assert(!messaging.keyPair);
-            assert(!messaging.useEncryption);
-            const keyPair = {
-                publicKey: Buffer.from(""),
-                secretKey: Buffer.from("")
-            };
-            messaging.setEncrypted(undefined, keyPair);
-            assert(!messaging.peerPublicKey);
-            assert(!messaging.keyPair);
-            assert(!messaging.useEncryption);
-        }, /Missing peerPublicKey and\/or keyPair for encryption./);
-    }
-
-    @Test()
     public successful_call() {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket);
         assert.doesNotThrow(function() {
-            assert(!messaging.peerPublicKey);
-            assert(!messaging.keyPair);
-            assert(!messaging.useEncryption);
-            const keyPair = {
-                publicKey: Buffer.from(""),
-                secretKey: Buffer.from("")
-            };
-            messaging.setEncrypted(Buffer.from("dummy"), keyPair);
-            assert(messaging.peerPublicKey);
-            assert(messaging.keyPair);
-            assert(messaging.useEncryption);
+            assert(!messaging.getPeerPublicKey());
+            assert(!messaging.encryptionKeys);
+            const outKey = Buffer.alloc(32);
+            const outNonce = Buffer.alloc(24);
+            const inKey = Buffer.alloc(32);
+            const inNonce = Buffer.alloc(24);
+            const peerPubKey = Buffer.alloc(32);
+            messaging.setEncrypted(outKey, outNonce, inKey, inNonce, peerPubKey);
+            assert(messaging.getPeerPublicKey());
+            assert(messaging.encryptionKeys);
         });
     }
 }
@@ -282,14 +231,15 @@ export class MessagingSetUnencrypted {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket);
         assert.doesNotThrow(function() {
-            const keyPair = {
-                publicKey: Buffer.from(""),
-                secretKey: Buffer.from("")
-            };
-            messaging.setEncrypted(Buffer.from("dummy"), keyPair);
-            assert(messaging.useEncryption);
+            const outKey = Buffer.alloc(32);
+            const outNonce = Buffer.alloc(24);
+            const inKey = Buffer.alloc(32);
+            const inNonce = Buffer.alloc(24);
+            const peerPubKey = Buffer.alloc(32);
+            messaging.setEncrypted(outKey, outNonce, inKey, inNonce, peerPubKey);
+            assert(messaging.encryptionKeys);
             messaging.setUnencrypted();
-            assert(!messaging.useEncryption);
+            assert(!messaging.encryptionKeys);
         });
     }
 }
@@ -301,10 +251,6 @@ export class MessagingOpen {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket);
         assert.doesNotThrow(function() {
-            const keyPair = {
-                publicKey: Buffer.from(""),
-                secretKey: Buffer.from("")
-            };
             messaging.isClosed = true;
             assert(messaging.isOpened == false);
             messaging.open();
@@ -317,10 +263,6 @@ export class MessagingOpen {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket);
         assert.doesNotThrow(function() {
-            const keyPair = {
-                publicKey: Buffer.from(""),
-                secretKey: Buffer.from("")
-            };
             messaging.isOpened = true;
             let flag = false;
             // Expected to be called only on success
@@ -339,10 +281,6 @@ export class MessagingOpen {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket);
         assert.doesNotThrow(function() {
-            const keyPair = {
-                publicKey: Buffer.from(""),
-                secretKey: Buffer.from("")
-            };
             let flag = false;
             // Expected to be called only on success
             // @ts-ignore: protected method
@@ -366,41 +304,27 @@ export class MessagingClose {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket);
         assert.doesNotThrow(function() {
-            const keyPair = {
-                publicKey: Buffer.from(""),
-                secretKey: Buffer.from("")
-            };
             let flag = false;
             messaging.socket.close = function() {
                 flag = true;
             }
-            messaging.isClosed = true;
             assert(flag == false);
             messaging.close();
             assert(flag == false);
         });
     }
 
-    // TODO: FIXME: public close procedure never toggles isClosed ?
     @Test()
     public successful_call() {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket);
         assert.doesNotThrow(function() {
-            const keyPair = {
-                publicKey: Buffer.from(""),
-                secretKey: Buffer.from("")
-            };
-            let flag = false;
-            messaging.socket.close = function() {
-                flag = true;
-            }
             assert(messaging.isClosed == false);
-            assert(flag == false);
+            assert(messaging.isOpened == false);
+            messaging.open();
+            assert(messaging.isOpened == true);
             messaging.close();
             assert(messaging.isClosed == true);
-            //@ts-ignore: expected to be changed by custom socket.close
-            assert(flag == true);
         });
     }
 }
@@ -412,10 +336,6 @@ export class MessagingCorkUncork {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket);
         assert.doesNotThrow(function() {
-            const keyPair = {
-                publicKey: Buffer.from(""),
-                secretKey: Buffer.from("")
-            };
             messaging.uncork(30);
             assert(messaging.dispatchLimit == 30);
             messaging.cork();
@@ -428,10 +348,6 @@ export class MessagingCorkUncork {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket);
         assert.doesNotThrow(function() {
-            const keyPair = {
-                publicKey: Buffer.from(""),
-                secretKey: Buffer.from("")
-            };
             assert(messaging.dispatchLimit == -1);
             messaging.uncork(30);
             assert(messaging.dispatchLimit == 30);
@@ -448,10 +364,6 @@ export class MessagingSend {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket);
         assert.doesNotThrow(function() {
-            const keyPair = {
-                publicKey: Buffer.from(""),
-                secretKey: Buffer.from("")
-            };
             assert(messaging.isOpened == false);
             assert(Object.keys(messaging.pendingReply).length == 0);
             messaging.send(Buffer.from(""));
@@ -464,10 +376,6 @@ export class MessagingSend {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket);
         assert.doesNotThrow(function() {
-            const keyPair = {
-                publicKey: Buffer.from(""),
-                secretKey: Buffer.from("")
-            };
             messaging.isClosed = true;
             assert(Object.keys(messaging.pendingReply).length == 0);
             messaging.send(Buffer.from(""));
@@ -480,10 +388,6 @@ export class MessagingSend {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket);
         assert.throws(function() {
-            const keyPair = {
-                publicKey: Buffer.from(""),
-                secretKey: Buffer.from("")
-            };
             assert(Object.keys(messaging.pendingReply).length == 0);
             messaging.isOpened = true;
             messaging.isClosed = false;
@@ -497,10 +401,6 @@ export class MessagingSend {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket);
         assert.doesNotThrow(function() {
-            const keyPair = {
-                publicKey: Buffer.from(""),
-                secretKey: Buffer.from("")
-            };
             assert(messaging.outgoingQueue.unencrypted.length == 0);
             assert(Object.keys(messaging.pendingReply).length == 0);
             messaging.isOpened = true;
@@ -517,10 +417,6 @@ export class MessagingSend {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket);
         assert.doesNotThrow(function() {
-            const keyPair = {
-                publicKey: Buffer.from(""),
-                secretKey: Buffer.from("")
-            };
             assert(messaging.outgoingQueue.unencrypted.length == 0);
             assert(Object.keys(messaging.pendingReply).length == 0);
             messaging.isOpened = true;
@@ -540,10 +436,6 @@ export class MessagingEncodeHeader {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket);
         assert.throws(function() {
-            const keyPair = {
-                publicKey: Buffer.from(""),
-                secretKey: Buffer.from("")
-            };
             //@ts-ignore protected function
             const id = messaging.generateMsgId();
             const header: Header = {
@@ -563,10 +455,6 @@ export class MessagingEncodeHeader {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket);
         assert.throws(function() {
-            const keyPair = {
-                publicKey: Buffer.from(""),
-                secretKey: Buffer.from("")
-            };
             const header: Header = {
                 version: 0,
                 target: Buffer.alloc(255).fill(255),
@@ -587,10 +475,6 @@ export class MessagingDecodeHeader {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket);
         assert.throws(function() {
-            const keyPair = {
-                publicKey: Buffer.from(""),
-                secretKey: Buffer.from("")
-            };
             //@ts-ignore protected function
             const id = messaging.generateMsgId();
             const header: Header = {
@@ -613,10 +497,6 @@ export class MessagingDecodeHeader {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket);
         assert.throws(function() {
-            const keyPair = {
-                publicKey: Buffer.from(""),
-                secretKey: Buffer.from("")
-            };
             //@ts-ignore protected function
             const id = messaging.generateMsgId();
             const header: Header = {
@@ -642,10 +522,6 @@ export class MessagingSocketClose {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket);
         assert.doesNotThrow(function() {
-            const keyPair = {
-                publicKey: Buffer.from(""),
-                secretKey: Buffer.from("")
-            };
             messaging.isClosed = true;
             //@ts-ignore protected function
             messaging.socketClose();
@@ -658,10 +534,6 @@ export class MessagingSocketClose {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket);
         assert.doesNotThrow(function() {
-            const keyPair = {
-                publicKey: Buffer.from(""),
-                secretKey: Buffer.from("")
-            };
             //@ts-ignore protected function
             messaging.emitEvent = function(emitters: EventEmitter[], type: EventType, arg: any) {
                 assert(emitters)
@@ -683,10 +555,6 @@ export class MessagingSocketData {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket);
         assert.doesNotThrow(function() {
-            const keyPair = {
-                publicKey: Buffer.from(""),
-                secretKey: Buffer.from("")
-            };
 
             let flag = false;
             //@ts-ignore custom signature
@@ -713,10 +581,6 @@ export class MessagingProcessInqueue {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket);
         assert.doesNotThrow(function() {
-            const keyPair = {
-                publicKey: Buffer.from(""),
-                secretKey: Buffer.from("")
-            };
 
             let flag = false;
             //@ts-ignore custom signature
@@ -737,10 +601,6 @@ export class MessagingProcessInqueue {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket);
         assert.doesNotThrow(async function() {
-            const keyPair = {
-                publicKey: Buffer.from(""),
-                secretKey: Buffer.from("")
-            };
 
             let counter = 0;
             //@ts-ignore custom signature
@@ -770,12 +630,7 @@ export class MessagingDecryptIncoming {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket);
         assert.doesNotThrow(async function() {
-            const keyPair = {
-                publicKey: Buffer.from(""),
-                secretKey: Buffer.from("")
-            };
 
-            messaging.useEncryption = false;
             messaging.incomingQueue.encrypted.push(Buffer.from(""));
 
             assert(messaging.incomingQueue.encrypted.length == 1);
@@ -784,55 +639,6 @@ export class MessagingDecryptIncoming {
             messaging.decryptIncoming();
             assert(messaging.incomingQueue.encrypted.length == 0);
             assert(messaging.incomingQueue.decrypted.length == 1);
-        });
-    }
-
-    @Test()
-    public encrypted_missing_peerPublicKey_noop() {
-        let [socket, _] = CreatePair();
-        let messaging = new Messaging(socket);
-        assert.doesNotThrow(async function() {
-            const keyPair = {
-                publicKey: Buffer.from(""),
-                secretKey: Buffer.from("")
-            };
-
-            messaging.setEncrypted(Buffer.from("dummy"), keyPair);
-            messaging.peerPublicKey = undefined;
-            messaging.useEncryption = true;
-            messaging.incomingQueue.encrypted.push(Buffer.from(""));
-
-            assert(messaging.incomingQueue.encrypted.length == 1);
-            assert(messaging.incomingQueue.decrypted.length == 0);
-            //@ts-ignore protected function
-            messaging.decryptIncoming();
-            assert(messaging.incomingQueue.encrypted.length == 1);
-            assert(messaging.incomingQueue.decrypted.length == 0);
-        });
-    }
-
-    @Test()
-    public encrypted_missing_keyPair_secretKey_noop() {
-        let [socket, _] = CreatePair();
-        let messaging = new Messaging(socket);
-        assert.doesNotThrow(async function() {
-            const keyPair = {
-                publicKey: Buffer.from(""),
-                secretKey: Buffer.from("")
-            };
-
-            messaging.setEncrypted(Buffer.from("dummy"), keyPair);
-            //@ts-ignore: force undefined
-            messaging.keyPair!.secretKey = undefined;
-            messaging.useEncryption = true;
-            messaging.incomingQueue.encrypted.push(Buffer.from(""));
-
-            assert(messaging.incomingQueue.encrypted.length == 1);
-            assert(messaging.incomingQueue.decrypted.length == 0);
-            //@ts-ignore protected function
-            messaging.decryptIncoming();
-            assert(messaging.incomingQueue.encrypted.length == 1);
-            assert(messaging.incomingQueue.decrypted.length == 0);
         });
     }
 
@@ -846,9 +652,13 @@ export class MessagingDecryptIncoming {
                 secretKey: Buffer.from("")
             };
 
-            messaging.setEncrypted(Buffer.from("dummy"), keyPair);
-            messaging.useEncryption = true;
-            messaging.incomingQueue.encrypted.push(Buffer.from(""));
+            const outKey = Buffer.alloc(32);
+            const outNonce = Buffer.alloc(24);
+            const inKey = Buffer.alloc(32);
+            const inNonce = Buffer.alloc(24);
+            const peerPubKey = Buffer.alloc(32);
+            messaging.setEncrypted(outKey, outNonce, inKey, inNonce, peerPubKey);
+            messaging.incomingQueue.encrypted.push(Buffer.from("aaa"));
 
             assert(messaging.incomingQueue.encrypted.length == 1);
             assert(messaging.incomingQueue.decrypted.length == 0);
@@ -867,12 +677,7 @@ export class MessagingAssembleIncoming {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket);
         assert.doesNotThrow(async function() {
-            const keyPair = {
-                publicKey: Buffer.from(""),
-                secretKey: Buffer.from("")
-            };
 
-            messaging.useEncryption = false;
             messaging.incomingQueue.encrypted.push(Buffer.from(""));
 
             assert(messaging.incomingQueue.encrypted.length == 1);
@@ -887,12 +692,7 @@ export class MessagingAssembleIncoming {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket);
         assert.doesNotThrow(async function() {
-            const keyPair = {
-                publicKey: Buffer.from(""),
-                secretKey: Buffer.from("")
-            };
 
-            messaging.useEncryption = false;
             messaging.incomingQueue.encrypted.push(Buffer.from("1234"));
             //@ts-ignore protected function
             messaging.decryptIncoming();
@@ -906,12 +706,7 @@ export class MessagingAssembleIncoming {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket);
         assert.doesNotThrow(async function() {
-            const keyPair = {
-                publicKey: Buffer.from(""),
-                secretKey: Buffer.from("")
-            };
 
-            messaging.useEncryption = false;
             messaging.incomingQueue.encrypted.push(Buffer.from("12345"));
             //@ts-ignore protected function
             messaging.decryptIncoming();
@@ -929,12 +724,7 @@ export class MessagingAssembleIncoming {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket);
         assert.doesNotThrow(async function() {
-            const keyPair = {
-                publicKey: Buffer.from(""),
-                secretKey: Buffer.from("")
-            };
 
-            messaging.useEncryption = false;
             messaging.incomingQueue.encrypted.push(Buffer.from("12345"));
             //@ts-ignore protected function
             messaging.decryptIncoming();
@@ -955,12 +745,7 @@ export class MessagingAssembleIncoming {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket);
         assert.doesNotThrow(async function() {
-            const keyPair = {
-                publicKey: Buffer.from(""),
-                secretKey: Buffer.from("")
-            };
 
-            messaging.useEncryption = false;
             messaging.incomingQueue.encrypted.push(Buffer.from("12345"));
             //@ts-ignore protected function
             messaging.decryptIncoming();
@@ -985,12 +770,7 @@ export class MessagingAssembleIncoming {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket);
         assert.doesNotThrow(async function() {
-            const keyPair = {
-                publicKey: Buffer.from(""),
-                secretKey: Buffer.from("")
-            };
 
-            messaging.useEncryption = false;
             messaging.incomingQueue.encrypted.push(Buffer.from("12345"));
             //@ts-ignore protected function
             messaging.decryptIncoming();
@@ -1021,12 +801,7 @@ export class MessagingDispatchIncoming {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket);
         assert.doesNotThrow(async function() {
-            const keyPair = {
-                publicKey: Buffer.from(""),
-                secretKey: Buffer.from("")
-            };
 
-            messaging.useEncryption = false;
             messaging.incomingQueue.encrypted.push(Buffer.from(""));
 
             assert(messaging.incomingQueue.messages.length == 0);
@@ -1041,12 +816,7 @@ export class MessagingDispatchIncoming {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket);
         assert.doesNotThrow(async function() {
-            const keyPair = {
-                publicKey: Buffer.from(""),
-                secretKey: Buffer.from("")
-            };
 
-            messaging.useEncryption = false;
             messaging.incomingQueue.encrypted.push(Buffer.from("12345"));
             //@ts-ignore protected function
             messaging.decryptIncoming();
@@ -1077,12 +847,7 @@ export class MessagingDispatchIncoming {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket);
         assert.doesNotThrow(async function() {
-            const keyPair = {
-                publicKey: Buffer.from(""),
-                secretKey: Buffer.from("")
-            };
 
-            messaging.useEncryption = false;
             messaging.incomingQueue.encrypted.push(Buffer.from("12345"));
             //@ts-ignore protected function
             messaging.decryptIncoming();
@@ -1113,12 +878,7 @@ export class MessagingDispatchIncoming {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket);
         assert.doesNotThrow(async function() {
-            const keyPair = {
-                publicKey: Buffer.from(""),
-                secretKey: Buffer.from("")
-            };
 
-            messaging.useEncryption = false;
             messaging.incomingQueue.encrypted.push(Buffer.from("12345"));
             //@ts-ignore protected function
             messaging.decryptIncoming();
@@ -1151,10 +911,6 @@ export class MessagingProcessOutqueue {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket);
         assert.doesNotThrow(async function() {
-            const keyPair = {
-                publicKey: Buffer.from(""),
-                secretKey: Buffer.from("")
-            };
 
             messaging.isBusyOut = 0;
 
@@ -1209,10 +965,6 @@ export class MessagingEncryptOutgoing {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket);
         assert.doesNotThrow(async function() {
-            const keyPair = {
-                publicKey: Buffer.from(""),
-                secretKey: Buffer.from("")
-            };
             messaging.isOpened = true;
             messaging.isClosed = false;
             const replyStatus = messaging.send(Buffer.alloc(255).fill(255));
@@ -1226,28 +978,6 @@ export class MessagingEncryptOutgoing {
     }
 
     @Test()
-    public encrypted_malconfigured() {
-        let [socket, _] = CreatePair();
-        let messaging = new Messaging(socket);
-        assert.doesNotThrow(async function() {
-            const keyPair = {
-                publicKey: Buffer.from(""),
-                secretKey: Buffer.from("")
-            };
-            messaging.isOpened = true;
-            messaging.isClosed = false;
-            messaging.useEncryption = true;
-            const replyStatus = messaging.send(Buffer.alloc(255).fill(255));
-            assert(messaging.outgoingQueue.unencrypted.length == 1 + 1);
-            assert(messaging.outgoingQueue.encrypted.length == 0);
-            //@ts-ignore: protected function
-            await messaging.encryptOutgoing();
-            assert(messaging.outgoingQueue.unencrypted.length == 2);
-            assert(messaging.outgoingQueue.encrypted.length == 0);
-        });
-    }
-
-    @Test()
     public encrypted_successful_call() {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket);
@@ -1255,13 +985,14 @@ export class MessagingEncryptOutgoing {
             const kp = nacl.box.keyPair();
             const keyPairPeer = nacl.box.keyPair();
             const peerPublicKey = keyPairPeer.publicKey;
-            const keyPair = {
-                publicKey: Buffer.from(kp.publicKey),
-                secretKey: Buffer.from(kp.secretKey)
-            };
             messaging.isOpened = true;
             messaging.isClosed = false;
-            messaging.setEncrypted(Buffer.from(peerPublicKey), keyPair);
+            const outKey = Buffer.alloc(32);
+            const outNonce = Buffer.alloc(24);
+            const inKey = Buffer.alloc(32);
+            const inNonce = Buffer.alloc(24);
+            const peerPubKey = Buffer.alloc(32);
+            messaging.setEncrypted(outKey, outNonce, inKey, inNonce, peerPubKey);
             const replyStatus = messaging.send(Buffer.alloc(255).fill(255));
             assert(messaging.outgoingQueue.unencrypted.length == 1 + 1);
             assert(messaging.outgoingQueue.encrypted.length == 0);
@@ -1296,13 +1027,14 @@ export class MessagingDispatchOutgoing {
             const kp = nacl.box.keyPair();
             const keyPairPeer = nacl.box.keyPair();
             const peerPublicKey = keyPairPeer.publicKey;
-            const keyPair = {
-                publicKey: Buffer.from(kp.publicKey),
-                secretKey: Buffer.from(kp.secretKey)
-            };
             messaging.isOpened = true;
             messaging.isClosed = false;
-            messaging.setEncrypted(Buffer.from(peerPublicKey), keyPair);
+            const outKey = Buffer.alloc(32);
+            const outNonce = Buffer.alloc(24);
+            const inKey = Buffer.alloc(32);
+            const inNonce = Buffer.alloc(24);
+            const peerPubKey = Buffer.alloc(32);
+            messaging.setEncrypted(outKey, outNonce, inKey, inNonce, peerPubKey);
             const replyStatus = messaging.send(Buffer.alloc(255).fill(255));
             //@ts-ignore: protected function
             await messaging.encryptOutgoing();
@@ -1331,7 +1063,7 @@ export class MessagingCheckTimeouts {
         assert.doesNotThrow(async function() {
             messaging.isOpened = false;
             //@ts-ignore: protected function
-            await messaging.checkTimeouts();
+            messaging.checkTimeouts();
         });
     }
 
@@ -1342,7 +1074,7 @@ export class MessagingCheckTimeouts {
         assert.doesNotThrow(async function() {
             messaging.isClosed = true;
             //@ts-ignore: protected function
-            await messaging.checkTimeouts();
+            messaging.checkTimeouts();
         });
     }
 
@@ -1351,8 +1083,9 @@ export class MessagingCheckTimeouts {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket);
         assert.doesNotThrow(async function() {
-            messaging.isOpened = true;
-            messaging.isClosed = false;
+            messaging.open();
+            assert(messaging.isOpened == true);
+            assert(messaging.isClosed == false);
             //@ts-ignore: protected function
             messaging.getTimeoutedPendingMessages = function() {
                 let messages: SentMessage[] = [];
@@ -1371,10 +1104,12 @@ export class MessagingCheckTimeouts {
             //@ts-ignore: protected function
             messaging.emitEvent = function(emitter: EventEmitter[], type: EventType, timeout: TimeoutEvent) {
                 assert(type == EventType.TIMEOUT);
+                //@ts-ignore: protected function
+                messaging.emitEvent = () => {};  // We need to cancel this because a "close" event would else reach this function and the assert will trigger.
+                messaging.close();
             }
             //@ts-ignore: protected function
             messaging.checkTimeouts();
-            messaging.close();
         });
     }
 }
