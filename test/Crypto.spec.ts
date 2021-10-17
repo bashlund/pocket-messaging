@@ -1,23 +1,12 @@
 import { TestSuite, Test, AfterAll, expect } from 'testyts';
 import nacl from "tweetnacl";
-import {encrypt, decrypt, randomBytes} from "../src/Crypto";
+import {box, unbox, randomBytes} from "../src/Crypto";
 
 @TestSuite()
 export class CryptoSpec {
     @Test()
     public encryption() {
-        const keyPair = nacl.box.keyPair();
-        const keyPairPeer = nacl.box.keyPair();
-        const peerPublicKey = keyPairPeer.publicKey;
-        const message = Buffer.from("Hello World");
-        const encrypted = encrypt(message, Buffer.from(peerPublicKey), Buffer.from(keyPair.secretKey));
-        expect.toBeTrue(encrypted !== undefined);
-        expect.toBeTrue(encrypted.toString() !== "Hello World");
-        const decrypted = decrypt(encrypted, Buffer.from(peerPublicKey), Buffer.from(keyPair.secretKey));
-        expect.toBeTrue(decrypted !== undefined);
-        //@ts-chillax
-        if (!decrypted) return;
-        expect.toBeTrue(decrypted.toString() === "Hello World");
+        // TODO test box and unbox
     }
 
     @Test()
