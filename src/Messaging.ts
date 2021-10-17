@@ -117,25 +117,6 @@ export class Messaging {
         return this.encryptionKeys?.peerPublicKey || undefined;
     }
 
-    //public setEncrypted(peerPublicKey?: Buffer, keyPair?: {publicKey: Buffer, secretKey: Buffer}) {
-        //if (peerPublicKey) {
-            //this.peerPublicKey = peerPublicKey;
-        //}
-        //if (keyPair) {
-            //this.keyPair = keyPair;
-        //}
-
-        //if (!this.peerPublicKey || !this.keyPair) {
-            //throw "Missing peerPublicKey and/or keyPair for encryption.";
-        //}
-
-        //this.useEncryption = true;
-    //}
-
-    //public static GenerateKeyPair(): KeyPair {
-        //return nacl.box.keyPair();
-    //}
-
     public setUnencrypted() {
         this.encryptionKeys = undefined;
     }
