@@ -34,8 +34,10 @@
     "c": "./node_modules/.bin/tsc"
   },
   "dependencies": {
+    "ed2curve": "^0.3.0",
     "eventemitter3": "^4.0.7",
-    "tweetnacl": "^1.0.3"
+    "tweetnacl": "^1.0.3",
+    "tweetnacl-auth": "^1.0.1"
   },
   "devDependencies": {
     "@tsconfig/node12": "^1.0.7",
