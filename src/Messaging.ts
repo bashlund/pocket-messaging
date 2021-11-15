@@ -178,7 +178,17 @@ export class Messaging {
         this.dispatchLimit = limit ?? -1;
     }
 
-    public send(target: Buffer | string, data?: Buffer, timeout?: number, stream?: boolean): EventEmitter | undefined {
+    /**
+     * Send message to remote.
+     * The returned EventEmitter can be hooked as eventEmitter.on("reply", fn) or
+     *  const data: ReplyEvent = await once(eventEmitter, "reply");
+     *  Other events are "close" (CloseEvent) and "mixed" which trigger both for "reply", "close" and "error" (ErrorEvent). There is also "timeout" (TimeoutEvent).
+     *
+     *  @param timeout milliseconds to wait for the first reply (undefined or 0 means forever)
+     *  @param stream set to true if expecting multiple replies
+     *  @param timeoutStream milliseconds to wait for secondary replies (undefined or 0 means forever)
+     */
+    public send(target: Buffer | string, data?: Buffer, timeout?: number, stream?: boolean, timeoutStream?: number): EventEmitter | undefined {
         if (!this.isOpened || this.isClosed) {
             return;
         }
@@ -190,7 +200,7 @@ export class Messaging {
         data = data ?? Buffer.alloc(0);
 
         if (data.length > 65535) {
-            throw "Data chunk to send cannot exceed 65525 bytes";
+            throw "Data chunk to send cannot exceed 65535 bytes";
         }
 
         const msgId = this.generateMsgId();
@@ -226,6 +236,8 @@ export class Messaging {
             timeout: Number(timeout),
             stream: Boolean(stream),
             eventEmitter,
+            timeoutStream: Number(timeoutStream),
+            replyCounter: 0,
         };
 
         return eventEmitter;
@@ -532,6 +544,7 @@ export class Messaging {
                 const pendingReply = this.pendingReply[targetMsgId];
 
                 if (pendingReply) {
+                    pendingReply.replyCounter++;
                     if (pendingReply.stream) {
                         // Expecting many replies, update timeout activity timestamp.
                         pendingReply.timestamp = this.getNow();
@@ -653,8 +666,15 @@ export class Messaging {
         const now = this.getNow();
         for (let msgId in this.pendingReply) {
             const sentMessage = this.pendingReply[msgId];
-            if (sentMessage.timeout && now > sentMessage.timestamp + sentMessage.timeout) {
-                timeouted.push(sentMessage);
+            if (sentMessage.replyCounter === 0) {
+                if (sentMessage.timeout && now > sentMessage.timestamp + sentMessage.timeout) {
+                    timeouted.push(sentMessage);
+                }
+            }
+            else {
+                if (sentMessage.timeoutStream && now > sentMessage.timestamp + sentMessage.timeoutStream) {
+                    timeouted.push(sentMessage);
+                }
             }
         }
         return timeouted;

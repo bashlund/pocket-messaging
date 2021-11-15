@@ -5,7 +5,9 @@ export type SentMessage = {
     msgId: Buffer,
     timeout: number,
     stream: boolean,
+    timeoutStream: number,
     eventEmitter: EventEmitter,
+    replyCounter: number,
 };
 
 /**
