@@ -656,6 +656,12 @@ export class Messaging {
             };
             this.emitEvent([sentMessage.eventEmitter],
                            EventType.TIMEOUT, timeoutEvent);
+            const mixedEvent: MixedEvent = {
+                type: EventType.TIMEOUT,
+                event: timeoutEvent
+            };
+            this.emitEvent([sentMessage.eventEmitter],
+                           EventType.MIXED, mixedEvent);
         }
 
         setTimeout(this.checkTimeouts, 500);
