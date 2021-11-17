@@ -618,7 +618,7 @@ export class MessagingProcessInqueue {
             messaging.isBusyIn = 1;
             //@ts-ignore protected function
             await messaging.processInqueue();
-            assert(counter == 3);
+            assert(counter == 2);
         });
     }
 }
