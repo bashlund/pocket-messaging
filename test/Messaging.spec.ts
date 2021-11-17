@@ -1093,6 +1093,8 @@ export class MessagingCheckTimeouts {
                     timestamp: 0,
                     msgId: Buffer.from("10"),
                     timeout: 0,
+                    timeoutStream: 0,
+                    replyCounter: 0,
                     stream: false,
                     eventEmitter: new EventEmitter()
                 });
@@ -1128,6 +1130,8 @@ export class MessagingGetTimeoutedPendingMessages {
                 timestamp: 0,
                 msgId: Buffer.from("20"),
                 timeout: 1,
+                timeoutStream: 0,
+                replyCounter: 0,
                 stream: false,
                 eventEmitter: new EventEmitter()
             };
@@ -1149,6 +1153,8 @@ export class MessagingGetTimeoutedPendingMessages {
                 timestamp: 0,
                 msgId: Buffer.from("20"),
                 timeout: 0,
+                timeoutStream: 0,
+                replyCounter: 0,
                 stream: false,
                 eventEmitter: new EventEmitter()
             };

@@ -7,6 +7,18 @@ export class CryptoSpec {
     @Test()
     public encryption() {
         // TODO test box and unbox
+
+        const chunk = Buffer.from("Hello World!");
+        const outgoingNonce = Buffer.alloc(24).fill(1);
+        const outgoingKey = Buffer.alloc(32).fill(2);
+        const [ciphertext, nextNonce] = box(chunk, outgoingNonce, outgoingKey);
+        expect.toBeFalse(ciphertext.equals(chunk));
+
+        const incomingNonce = Buffer.alloc(24).fill(1);
+        const incomingKey = outgoingKey;
+        const [decrypted, nextNonce2] = unbox(ciphertext, incomingNonce, incomingKey) || [];
+        expect.toBeTrue(Boolean(decrypted?.equals(chunk)));
+        expect.toBeTrue(nextNonce2 && Boolean(nextNonce?.equals(nextNonce2)) || false);
     }
 
     @Test()
