@@ -60,11 +60,11 @@ export class Messaging {
      * Setting this activates encryption.
      */
     encryptionKeys?: {
-        outgoingKey: Buffer,
-        outgoingNonce: Buffer,
-        incomingKey: Buffer,
-        incomingNonce: Buffer,
-        peerPublicKey: Buffer
+        outgoingKey: Buffer,    // Used for box encryption
+        outgoingNonce: Buffer,  // Used for box encryption
+        incomingKey: Buffer,    // Used for box decryption
+        incomingNonce: Buffer,  // Used for box decryption
+        peerPublicKey: Buffer   // Peer long term public key, only kept for convenience.
     };
 
     /**
@@ -103,6 +103,11 @@ export class Messaging {
         return this.instanceId;
     }
 
+    /**
+     * Pass in the params returned from a successful handshake.
+     *
+     * @param peerPublicKey our peer's long term public key, only stored for convenience, is not used in encryption.
+     */
     public setEncrypted(outgoingKey: Buffer, outgoingNonce: Buffer, incomingKey: Buffer, incomingNonce: Buffer, peerPublicKey: Buffer) {
         this.encryptionKeys = {
             outgoingKey,
