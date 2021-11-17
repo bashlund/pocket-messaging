@@ -416,7 +416,6 @@ export class Messaging {
         this.incomingQueue.encrypted.push(data);
         this.isBusyIn++;
         this.processInqueue();
-        setImmediate(this.processInqueue);
     }
 
     protected processInqueue = async () => {
@@ -426,7 +425,11 @@ export class Messaging {
         this.isBusyIn--;
 
         await this.decryptIncoming();
-        this.assembleIncoming();
+        if (!this.assembleIncoming()) {
+            // Bad stream, close.
+            this.close();
+            return;
+        }
         this.dispatchIncoming();
         this.processInqueue();  // In case someone increased the isBusyIn counter
     }
@@ -438,30 +441,34 @@ export class Messaging {
         if (this.encryptionKeys) {
             let chunk = Buffer.alloc(0);
             while (this.incomingQueue.encrypted.length > 0) {
-                if (this.incomingQueue.encrypted.length > 0) {
-                    const b = this.incomingQueue.encrypted.shift();
-                    if (b) {
-                        chunk = Buffer.concat([chunk, b]);
-                    }
+                const b = this.incomingQueue.encrypted.shift();
+                if (b) {
+                    chunk = Buffer.concat([chunk, b]);
                 }
-                else if (chunk.length === 0) {
-                    break;
+                if (chunk.length === 0) {
+                    continue;
                 }
 
                 // TODO: this we should do in a separate thread
-                //const decrypted = decrypt(chunk, this.peerPublicKey, this.keyPair.secretKey);
-                const ret = unbox(chunk, this.encryptionKeys.incomingNonce, this.encryptionKeys.incomingKey);
-                if (!ret) {
-                    // Not enough data in chunk
-                    if (this.incomingQueue.encrypted.length === 0) {
-                        break;
+                try {
+                    const ret = unbox(chunk, this.encryptionKeys.incomingNonce, this.encryptionKeys.incomingKey);
+                    if (!ret) {
+                        // Not enough data in chunk
+                        if (this.incomingQueue.encrypted.length === 0) {
+                            break;
+                        }
+                        continue;
                     }
-                    continue;
+                    const [decrypted, nextNonce, bytesConsumed] = ret;
+                    this.encryptionKeys.incomingNonce = nextNonce;
+                    this.incomingQueue.decrypted.push(decrypted);
+                    chunk = chunk.slice(bytesConsumed);
                 }
-                const [decrypted, nextNonce, bytesConsumed] = ret;
-                this.encryptionKeys.incomingNonce = nextNonce;
-                this.incomingQueue.decrypted.push(decrypted);
-                chunk = chunk.slice(bytesConsumed);
+                catch(e) {
+                    console.error("Error unboxing message. Closing socket.");
+                    this.close();
+                    return;
+                }
             }
             if (chunk.length > 0) {
                 // Data rest, put ut back to queue
@@ -480,19 +487,26 @@ export class Messaging {
      * Assemble messages from decrypted data and put to next queue.
      *
      */
-    protected assembleIncoming = () => {
+    protected assembleIncoming = (): boolean => {
         while (this.incomingQueue.decrypted.length > 0) {
             if (this.incomingQueue.decrypted[0].length < 5) {
-                // Not enough data ready
-                return;
+                // Not enough data ready, see if we can collapse
+                if (this.incomingQueue.decrypted.length > 1) {
+                    const buf = this.incomingQueue.decrypted.shift();
+                    if (buf) {
+                        this.incomingQueue.decrypted[0] = Buffer.concat([buf, this.incomingQueue.decrypted[0]]);
+                    }
+                    continue;
+                }
+                return true;
             }
 
             // Check version byte
             const version = this.incomingQueue.decrypted[0].readUInt8(0);
             if (version !== 0) {
-                console.error("Bad stream detected, closing.");
-                this.close();
-                return;
+                this.incomingQueue.decrypted.length = 0;
+                console.error("Bad stream detected reading version byte.");
+                return false;
             }
 
             const length = this.incomingQueue.decrypted[0].readUInt32LE(1);
@@ -500,14 +514,14 @@ export class Messaging {
             const buffer = this.extractBuffer(this.incomingQueue.decrypted, length);
             if (!buffer) {
                 // Not enough data ready
-                return;
+                return true;
             }
 
             const ret = this.decodeHeader(buffer);
             if (!ret) {
-                console.error("Bad stream detected, closing.");
-                this.close();
-                return;
+                this.incomingQueue.decrypted.length = 0;
+                console.error("Bad stream detected in header.");
+                return false;
             }
             const [header, data]: [Header, Buffer] = ret;
 
@@ -520,6 +534,7 @@ export class Messaging {
 
             this.incomingQueue.messages.push(inMessage);
         }
+        return true;
     };
 
     /**
@@ -616,7 +631,6 @@ export class Messaging {
                     continue;
                 }
                 // TODO: here we should use another thread to do the heavy work.
-                //const encrypted = encrypt(chunk, this.peerPublicKey, this.keyPair.secretKey);
                 const [encrypted, nextNonce] = box(chunk,
                                                    this.encryptionKeys.outgoingNonce,
                                                    this.encryptionKeys.outgoingKey);
