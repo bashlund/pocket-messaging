@@ -76,8 +76,8 @@ export function unbox(ciphertext: Buffer, nonce: Buffer, key: Buffer): [Buffer, 
         throw "Could not unbox body";
     }
 
-    const nextNode = increaseNonce(headerNonce);
-    return [Buffer.from(body), headerNonce, 34 + bodyLength];
+    const nextNonce = increaseNonce(headerNonce);
+    return [Buffer.from(body), nextNonce, 34 + bodyLength];
 }
 
 export function randomBytes(count: number) {
