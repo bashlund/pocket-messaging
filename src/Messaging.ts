@@ -555,7 +555,7 @@ export class Messaging {
                 // Let through
             }
 
-            const inMessage = this.incomingQueue.messages.pop();
+            const inMessage = this.incomingQueue.messages.shift();
 
             if (inMessage) {
                 // Note: target is not necessarily a msg ID,
