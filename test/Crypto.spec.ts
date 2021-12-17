@@ -33,3 +33,17 @@ export class CryptoSpec {
         expect.toBeTrue(data.length == 200);
     }
 }
+
+type KeyPair = {
+    publicKey: Buffer,
+    secretKey: Buffer
+};
+
+function createEphemeralKeys(): KeyPair {
+    const keyPair = nacl.box.keyPair();
+    return {
+        publicKey: Buffer.from(keyPair.publicKey),
+        secretKey: Buffer.from(keyPair.secretKey)
+    };
+}
+

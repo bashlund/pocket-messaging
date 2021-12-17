@@ -158,7 +158,7 @@ export class MessagingSpec {
             expect.toBeTrue(ee1a !== undefined, "Expecting eventemitter returned");
             if (!ee1a) return;  //@ts-chillax
 
-            const reply = await once(ee1a, "reply");
+            const reply = await once(ee1a.eventEmitter, "reply");
 
             // This will emit a close event
             this.messaging1.close();
@@ -169,7 +169,7 @@ export class MessagingSpec {
         expect.toBeTrue(ee2a !== undefined, "Expecting eventemitter returned");
         if (!ee2a) return;
 
-        const reply = await once(ee2a, "mixed");  // this also catched close event
+        const reply = await once(ee2a.eventEmitter, "mixed");  // this also catched close event
         expect.toBeTrue(reply !== undefined);
         expect.toBeTrue(reply.type === "close");
     }
@@ -424,7 +424,7 @@ export class MessagingSend {
             const replyStatus = messaging.send(Buffer.alloc(255).fill(255), undefined, 1);
             assert(messaging.outgoingQueue.unencrypted.length == 1 + 1);
             assert(Object.keys(messaging.pendingReply).length == 1);
-            assert(replyStatus instanceof EventEmitter);
+            assert(replyStatus?.eventEmitter instanceof EventEmitter);
         });
     }
 }
