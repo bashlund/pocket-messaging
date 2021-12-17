@@ -16,6 +16,19 @@ type KeyPair = {
     secretKey: Buffer
 };
 
+// Compare two buffers in constant time
+function Equals(a: Buffer, b: Buffer): boolean {
+    if (a.length !== b.length) {
+        // Cannot compare buffers of different lengths in constant time
+        return false;
+    }
+    let result = 0;  // == buffers are equal.
+    for (let i=0; i<a.length; i++) {
+        result |= a[i] ^ b[i];
+    }
+    return result === 0;  // true if buffers are equals
+}
+
 function createEphemeralKeys(): KeyPair {
     const keyPair = nacl.box.keyPair();
     return {
@@ -31,7 +44,7 @@ function hmac(msg: Buffer, key: Buffer): Buffer {
 
 function assertHmac(clientHmac: Buffer, msg: Buffer, key: Buffer): boolean {
     const hmac2 = hmac(msg, key);
-    return hmac2.equals(clientHmac);
+    return Equals(hmac2, clientHmac);
 }
 
 function clientSharedSecret_ab(clientEphemeralSk: Buffer, serverEphemeralPk: Buffer): Buffer {
@@ -179,6 +192,10 @@ function verifyMessage3(ciphertext: Buffer, serverLongtermPk: Buffer, discrimina
     const key = sha256(Buffer.concat([discriminator, sharedSecret_ab, sharedSecret_aB]));
     const msg3 = secretBoxOpen(ciphertext, nonce, key);
 
+    if (msg3.length !== 64 + 32 + 96) {
+        throw "Length mismatch decrypting message 3";
+    }
+
     const detachedSigA = msg3.slice(0, 64);
     const clientLongtermPk = msg3.slice(64, 64+32);
     const clientData = msg3.slice(64+32);
@@ -237,6 +254,9 @@ function verifyMessage4(ciphertext: Buffer, detachedSigA: Buffer, clientLongterm
 export async function HandshakeAsClient(client: Client, clientLongtermSk: Buffer, clientLongtermPk: Buffer, serverLongtermPk: Buffer, discriminator: Buffer, clientData?: Function | Buffer): Promise<{clientToServerKey: Buffer, clientNonce: Buffer, serverToClientKey: Buffer, serverNonce: Buffer, serverData: Buffer}> {
     return new Promise( async (resolve, reject) => {
         try {
+            // Make sure the discriminator is constant length
+            discriminator = sha256(discriminator);
+
             const clientEphemeralKeys = createEphemeralKeys();
             const clientEphemeralPk = clientEphemeralKeys.publicKey;
             const clientEphemeralSk = clientEphemeralKeys.secretKey;
@@ -256,7 +276,7 @@ export async function HandshakeAsClient(client: Client, clientLongtermSk: Buffer
             const detachedSigA = signDetached(Buffer.concat([discriminator, serverLongtermPk, sha256(sharedSecret_ab)]), clientLongtermSk);
             if (typeof(clientData) === "function") {
                 // Dynamically compute client data based on signature A.
-                // This provides a way for cliennt to provide PoW to the server if the server requires that due to some ongoing DDoS.
+                // This provides a way for client to provide PoW to the server if the server requires that due to some ongoing DDoS.
                 clientData = clientData(detachedSigA);
             }
             if (!Buffer.isBuffer(clientData)) {
@@ -291,6 +311,9 @@ export async function HandshakeAsClient(client: Client, clientLongtermSk: Buffer
 export async function HandshakeAsServer(client: Client, serverLongtermSk: Buffer, serverLongtermPk: Buffer, discriminator: Buffer, allowedClientKey?: Function | Buffer[], serverData?: Function | Buffer): Promise<{clientLongtermPk: Buffer, clientToServerKey: Buffer, clientNonce: Buffer, serverToClientKey: Buffer, serverNonce: Buffer, clientData: Buffer}> {
     return new Promise( async (resolve, reject) => {
         try {
+            // Make sure the discriminator is constant length
+            discriminator = sha256(discriminator);
+
             const serverEphemeralKeys = createEphemeralKeys();
             const serverEphemeralPk = serverEphemeralKeys.publicKey;
             const serverEphemeralSk = serverEphemeralKeys.secretKey;
@@ -312,8 +335,9 @@ export async function HandshakeAsServer(client: Client, serverLongtermSk: Buffer
 
             if (typeof(serverData) === "function") {
                 // The server can verify and/or check the client data.
-                // If it dislikes the clientData then it will throw an exception and abort this handshake.
-                serverData = serverData(clientData, detachedSigA);
+                // This could be something like a PoW check on the detachedSigA to prevent DDoS attacks.
+                // If it dislikes the clientData then it must throw an exception and abort this handshake.
+                serverData = await serverData(clientData, detachedSigA);
             }
             if (!Buffer.isBuffer(serverData)) {
                 serverData = undefined;
@@ -323,11 +347,11 @@ export async function HandshakeAsServer(client: Client, serverLongtermSk: Buffer
             if (allowedClientKey) {
                 if (typeof(allowedClientKey) === "function") {
                     if (!allowedClientKey(clientLongtermPk)) {
-                        throw "Cling longterm pk not allowed by function";
+                        throw "Client longterm pk not allowed by function";
                     }
                 }
                 else if (Array.isArray(allowedClientKey)) {
-                    if (!allowedClientKey.find( (pk) => pk.equals(clientLongtermPk) )) {
+                    if (!allowedClientKey.find( (pk) => Equals(pk, clientLongtermPk) )) {
                         throw "Client longterm pk not in list of allowed public keys";
                     }
                 }
