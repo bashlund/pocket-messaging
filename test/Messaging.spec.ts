@@ -1,5 +1,4 @@
 import { TestSuite, Test, AfterAll, expect } from 'testyts';
-import nacl from "tweetnacl";
 
 import EventEmitter from "eventemitter3";
 
@@ -209,7 +208,7 @@ export class MessagingSetEncrypted {
     public successful_call() {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket);
-        assert.doesNotThrow(function() {
+        assert.doesNotThrow(async function() {
             assert(!messaging.getPeerPublicKey());
             assert(!messaging.encryptionKeys);
             const outKey = Buffer.alloc(32);
@@ -217,7 +216,7 @@ export class MessagingSetEncrypted {
             const inKey = Buffer.alloc(32);
             const inNonce = Buffer.alloc(24);
             const peerPubKey = Buffer.alloc(32);
-            messaging.setEncrypted(outKey, outNonce, inKey, inNonce, peerPubKey);
+            await messaging.setEncrypted(outKey, outNonce, inKey, inNonce, peerPubKey);
             assert(messaging.getPeerPublicKey());
             assert(messaging.encryptionKeys);
         });
@@ -230,13 +229,13 @@ export class MessagingSetUnencrypted {
     public successful_call() {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket);
-        assert.doesNotThrow(function() {
+        assert.doesNotThrow(async function() {
             const outKey = Buffer.alloc(32);
             const outNonce = Buffer.alloc(24);
             const inKey = Buffer.alloc(32);
             const inNonce = Buffer.alloc(24);
             const peerPubKey = Buffer.alloc(32);
-            messaging.setEncrypted(outKey, outNonce, inKey, inNonce, peerPubKey);
+            await messaging.setEncrypted(outKey, outNonce, inKey, inNonce, peerPubKey);
             assert(messaging.encryptionKeys);
             messaging.setUnencrypted();
             assert(!messaging.encryptionKeys);
@@ -657,7 +656,7 @@ export class MessagingDecryptIncoming {
             const inKey = Buffer.alloc(32);
             const inNonce = Buffer.alloc(24);
             const peerPubKey = Buffer.alloc(32);
-            messaging.setEncrypted(outKey, outNonce, inKey, inNonce, peerPubKey);
+            await messaging.setEncrypted(outKey, outNonce, inKey, inNonce, peerPubKey);
             messaging.incomingQueue.encrypted.push(Buffer.from("aaa"));
 
             assert(messaging.incomingQueue.encrypted.length == 1);
@@ -982,9 +981,6 @@ export class MessagingEncryptOutgoing {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket);
         assert.doesNotThrow(async function() {
-            const kp = nacl.box.keyPair();
-            const keyPairPeer = nacl.box.keyPair();
-            const peerPublicKey = keyPairPeer.publicKey;
             messaging.isOpened = true;
             messaging.isClosed = false;
             const outKey = Buffer.alloc(32);
@@ -992,7 +988,7 @@ export class MessagingEncryptOutgoing {
             const inKey = Buffer.alloc(32);
             const inNonce = Buffer.alloc(24);
             const peerPubKey = Buffer.alloc(32);
-            messaging.setEncrypted(outKey, outNonce, inKey, inNonce, peerPubKey);
+            await messaging.setEncrypted(outKey, outNonce, inKey, inNonce, peerPubKey);
             const replyStatus = messaging.send(Buffer.alloc(255).fill(255));
             assert(messaging.outgoingQueue.unencrypted.length == 1 + 1);
             assert(messaging.outgoingQueue.encrypted.length == 0);
@@ -1024,9 +1020,6 @@ export class MessagingDispatchOutgoing {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket);
         assert.doesNotThrow(async function() {
-            const kp = nacl.box.keyPair();
-            const keyPairPeer = nacl.box.keyPair();
-            const peerPublicKey = keyPairPeer.publicKey;
             messaging.isOpened = true;
             messaging.isClosed = false;
             const outKey = Buffer.alloc(32);
@@ -1034,7 +1027,7 @@ export class MessagingDispatchOutgoing {
             const inKey = Buffer.alloc(32);
             const inNonce = Buffer.alloc(24);
             const peerPubKey = Buffer.alloc(32);
-            messaging.setEncrypted(outKey, outNonce, inKey, inNonce, peerPubKey);
+            await messaging.setEncrypted(outKey, outNonce, inKey, inNonce, peerPubKey);
             const replyStatus = messaging.send(Buffer.alloc(255).fill(255));
             //@ts-ignore: protected function
             await messaging.encryptOutgoing();

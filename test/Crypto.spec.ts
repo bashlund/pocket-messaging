@@ -1,12 +1,13 @@
 import { TestSuite, Test, AfterAll, expect } from 'testyts';
-import nacl from "tweetnacl";
-import {box, unbox, randomBytes} from "../src/Crypto";
+import {box, unbox, randomBytes, init} from "../src/Crypto";
 
 @TestSuite()
 export class CryptoSpec {
     @Test()
-    public encryption() {
+    public async encryption() {
         // TODO test box and unbox
+
+        await init();  // libsodium
 
         const chunk = Buffer.from("Hello World!");
         const outgoingNonce = Buffer.alloc(24).fill(1);
@@ -22,7 +23,9 @@ export class CryptoSpec {
     }
 
     @Test()
-    public bytes() {
+    public async bytes2() {
+        await init();  // libsodium
+
         let data = randomBytes(0);
         expect.toBeTrue(data.length == 0);
 
@@ -33,17 +36,3 @@ export class CryptoSpec {
         expect.toBeTrue(data.length == 200);
     }
 }
-
-type KeyPair = {
-    publicKey: Buffer,
-    secretKey: Buffer
-};
-
-function createEphemeralKeys(): KeyPair {
-    const keyPair = nacl.box.keyPair();
-    return {
-        publicKey: Buffer.from(keyPair.publicKey),
-        secretKey: Buffer.from(keyPair.secretKey)
-    };
-}
-

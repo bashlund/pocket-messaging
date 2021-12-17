@@ -1,6 +1,7 @@
 import {Client} from "../../pocket-sockets";
 import EventEmitter from "eventemitter3";
-import {box, unbox, randomBytes} from "./Crypto";
+import {box, unbox, init} from "./Crypto";
+import crypto from "crypto";  // Only used for synchronous randomBytes.
 
 import {
     SentMessage,
@@ -86,7 +87,7 @@ export class Messaging {
         this.dispatchLimit = -1;
         this.isBusyOut = 0;
         this.isBusyIn = 0;
-        this.instanceId = Buffer.from(randomBytes(8)).toString("hex");
+        this.instanceId = Buffer.from(crypto.randomBytes(8)).toString("hex");
         this.incomingQueue = {
             encrypted: [],
             decrypted: [],
@@ -108,7 +109,8 @@ export class Messaging {
      *
      * @param peerPublicKey our peer's long term public key, only stored for convenience, is not used in encryption.
      */
-    public setEncrypted(outgoingKey: Buffer, outgoingNonce: Buffer, incomingKey: Buffer, incomingNonce: Buffer, peerPublicKey: Buffer) {
+    public async setEncrypted(outgoingKey: Buffer, outgoingNonce: Buffer, incomingKey: Buffer, incomingNonce: Buffer, peerPublicKey: Buffer) {
+        await init();  // init sodium
         this.encryptionKeys = {
             outgoingKey,
             outgoingNonce,
@@ -253,7 +255,7 @@ export class Messaging {
     }
 
     protected generateMsgId(): Buffer {
-        const msgId = Buffer.from(randomBytes(4));
+        const msgId = Buffer.from(crypto.randomBytes(4));
         return msgId;
     }
 

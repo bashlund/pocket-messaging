@@ -1,6 +1,6 @@
-import { TestSuite, Test, AfterAll, expect } from 'testyts';
-import nacl from "tweetnacl";
+import { TestSuite, Test, AfterAll, BeforeAll, expect } from 'testyts';
 
+import {genKeyPair, init} from "../src/Crypto";
 import {CreatePair, Client} from "../../pocket-sockets";
 import {HandshakeAsClient, HandshakeAsServer} from "../src/Handshake";
 const assert = require("assert");
@@ -19,17 +19,24 @@ export class HandshakeSpec {
 
     constructor() {
         [this.socket1, this.socket2] = CreatePair();
-        this.keyPairClient = this.createKeys();
-        this.keyPairServer = this.createKeys();
+        this.keyPairClient = {publicKey: Buffer.alloc(0), secretKey: Buffer.alloc(0)};
+        this.keyPairServer  = {publicKey: Buffer.alloc(0), secretKey: Buffer.alloc(0)};
     }
 
-    createKeys(): KeyPair {
-        const keyPair = nacl.sign.keyPair();
-        return {
-            publicKey: Buffer.from(keyPair.publicKey),
-            secretKey: Buffer.from(keyPair.secretKey)
-        };
+    @BeforeAll()
+    async init() {
+        await init();
+        this.keyPairClient = genKeyPair();
+        this.keyPairServer = genKeyPair();
     }
+
+    //createKeys(): KeyPair {
+        //const keyPair = nacl.sign.keyPair();
+        //return {
+            //publicKey: Buffer.from(keyPair.publicKey),
+            //secretKey: Buffer.from(keyPair.secretKey)
+        //};
+    //}
 
     @Test()
     public async handshake() {

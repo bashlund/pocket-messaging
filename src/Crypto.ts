@@ -1,4 +1,8 @@
-import nacl from "tweetnacl";
+import sodium from "libsodium-wrappers";
+
+export async function init() {
+    await sodium.ready;
+}
 
 function increaseNonce(nonceOriginal: Buffer): Buffer {
     const nonce = Buffer.from(nonceOriginal);
@@ -27,7 +31,7 @@ export function box(message: Buffer, nonce: Buffer, key: Buffer): [Buffer, Buffe
     if (message.length > 65535) {
         throw "Maximum message length is 65535 when boxing it";
     }
-    const encryptedBody = nacl.secretbox(message, nonce, key);
+    const encryptedBody = sodium.crypto_secretbox_easy(message, nonce, key);
     const headerNonce = increaseNonce(nonce);
 
     const bodyAuthTag = encryptedBody.slice(0, 16);
@@ -35,7 +39,7 @@ export function box(message: Buffer, nonce: Buffer, key: Buffer): [Buffer, Buffe
     bodyLength.writeUInt16BE(message.length, 0);
 
     const header = Buffer.concat([bodyLength, bodyAuthTag]);  // 18 bytes
-    const encryptedHeader = nacl.secretbox(header, headerNonce, key);  // 34 bytes
+    const encryptedHeader = sodium.crypto_secretbox_easy(header, headerNonce, key);  // 34 bytes
     const nextNonce = increaseNonce(headerNonce);
 
     const ciphertext = Buffer.concat([encryptedHeader, encryptedBody.slice(16)]);
@@ -59,7 +63,7 @@ export function unbox(ciphertext: Buffer, nonce: Buffer, key: Buffer): [Buffer, 
     }
     const encrypted_header = ciphertext.slice(0, 34);
     const headerNonce = increaseNonce(nonce);
-    const headerArray = nacl.secretbox.open(encrypted_header, headerNonce, key);
+    const headerArray = sodium.crypto_secretbox_open_easy(encrypted_header, headerNonce, key);
     if (!headerArray) {
         throw "Could not unbox header";
     }
@@ -71,7 +75,7 @@ export function unbox(ciphertext: Buffer, nonce: Buffer, key: Buffer): [Buffer, 
         return undefined;
     }
     const encryptedBody = ciphertext.slice(34, 34 + bodyLength);
-    const body = nacl.secretbox.open(Buffer.concat([header.slice(2), encryptedBody]), nonce, key);
+    const body = sodium.crypto_secretbox_open_easy(Buffer.concat([header.slice(2), encryptedBody]), nonce, key);
     if (!body) {
         throw "Could not unbox body";
     }
@@ -81,5 +85,18 @@ export function unbox(ciphertext: Buffer, nonce: Buffer, key: Buffer): [Buffer, 
 }
 
 export function randomBytes(count: number) {
-    return nacl.randomBytes(count);
+    return sodium.randombytes_buf(count);
+}
+
+type KeyPair = {
+    publicKey: Buffer,
+    secretKey: Buffer
+};
+
+export function genKeyPair(): KeyPair {
+    const keyPair = sodium.crypto_sign_keypair();
+    return {
+        publicKey: Buffer.from(keyPair.publicKey),
+        secretKey: Buffer.from(keyPair.privateKey)
+    };
 }

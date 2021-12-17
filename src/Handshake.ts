@@ -3,13 +3,8 @@
  * with an added arbitrary 96 byte client/server data transmission.
  */
 
+import sodium from "libsodium-wrappers";
 import {Client, ByteSize} from "../../pocket-sockets";
-import nacl from "tweetnacl";
-//@ts-ignore TODO: get types for this
-import nacl_auth from "tweetnacl-auth";
-//@ts-ignore TODO: get types for this
-import ed2curve from "ed2curve"
-import crypto from "crypto";
 
 type KeyPair = {
     publicKey: Buffer,
@@ -30,15 +25,15 @@ function Equals(a: Buffer, b: Buffer): boolean {
 }
 
 function createEphemeralKeys(): KeyPair {
-    const keyPair = nacl.box.keyPair();
+    const keyPair = sodium.crypto_box_keypair();
     return {
         publicKey: Buffer.from(keyPair.publicKey),
-        secretKey: Buffer.from(keyPair.secretKey)
+        secretKey: Buffer.from(keyPair.privateKey)
     };
 }
 
 function hmac(msg: Buffer, key: Buffer): Buffer {
-    const hmac = nacl_auth(msg, key);
+    const hmac = sodium.crypto_auth(msg, key);
     return Buffer.from(hmac);
 }
 
@@ -48,43 +43,43 @@ function assertHmac(clientHmac: Buffer, msg: Buffer, key: Buffer): boolean {
 }
 
 function clientSharedSecret_ab(clientEphemeralSk: Buffer, serverEphemeralPk: Buffer): Buffer {
-    return Buffer.from(nacl.scalarMult(clientEphemeralSk, serverEphemeralPk));
+    return Buffer.from(sodium.crypto_scalarmult(clientEphemeralSk, serverEphemeralPk));
 }
 
 function serverSharedSecret_ab(serverEphemeralSk: Buffer, clientEphemeralPk: Buffer): Buffer {
-    return Buffer.from(nacl.scalarMult(serverEphemeralSk, clientEphemeralPk));
+    return Buffer.from(sodium.crypto_scalarmult(serverEphemeralSk, clientEphemeralPk));
 }
 
 function clientSharedSecret_aB(clientEphemeralPk: Buffer, serverLongtermPk: Buffer): Buffer {
-    return Buffer.from(nacl.scalarMult(clientEphemeralPk, ed2curve.convertPublicKey(serverLongtermPk)));
+    return Buffer.from(sodium.crypto_scalarmult(clientEphemeralPk, sodium.crypto_sign_ed25519_pk_to_curve25519(serverLongtermPk)));
 }
 
 function serverSharedSecret_aB(serverLongtermSk: Buffer, clientEphemeralPk: Buffer): Buffer {
-    return Buffer.from(nacl.scalarMult(ed2curve.convertSecretKey(serverLongtermSk), clientEphemeralPk));
+    return Buffer.from(sodium.crypto_scalarmult(sodium.crypto_sign_ed25519_sk_to_curve25519(serverLongtermSk), clientEphemeralPk));
 }
 
 function clientSharedSecret_Ab(clientLongtermSk: Buffer, serverEphemeralPk: Buffer): Buffer {
-    return Buffer.from(nacl.scalarMult(ed2curve.convertSecretKey(clientLongtermSk), serverEphemeralPk));
+    return Buffer.from(sodium.crypto_scalarmult(sodium.crypto_sign_ed25519_sk_to_curve25519(clientLongtermSk), serverEphemeralPk));
 }
 
 function serverSharedSecret_Ab(serverEphemeralSk: Buffer, clientLongtermPk: Buffer): Buffer {
-    return Buffer.from(nacl.scalarMult(serverEphemeralSk, ed2curve.convertPublicKey(clientLongtermPk)));
+    return Buffer.from(sodium.crypto_scalarmult(serverEphemeralSk, sodium.crypto_sign_ed25519_pk_to_curve25519(clientLongtermPk)));
 }
 
 function signDetached(msg: Buffer, secretKey: Buffer): Buffer {
-    return Buffer.from(nacl.sign.detached(msg, secretKey));
+    return Buffer.from(sodium.crypto_sign_detached(msg, secretKey));
 }
 
 function signVerifyDetached(msg: Buffer, sig: Buffer, publicKey: Buffer): boolean {
-    return nacl.sign.detached.verify(msg, sig, publicKey);
+    return sodium.crypto_sign_verify_detached(sig, msg, publicKey);
 }
 
 function secretBox(msg: Buffer, nonce: Buffer, key: Buffer): Buffer {
-    return Buffer.from(nacl.secretbox(msg, nonce, key));
+    return Buffer.from(sodium.crypto_secretbox_easy(msg, nonce, key));
 }
 
 function secretBoxOpen(ciphertext: Buffer, nonce: Buffer, key: Buffer): Buffer {
-    const unboxed = nacl.secretbox.open(ciphertext, nonce, key);
+    const unboxed = sodium.crypto_secretbox_open_easy(ciphertext, nonce, key);
     if (!unboxed) {
         throw "Could not open box";
     }
@@ -92,23 +87,22 @@ function secretBoxOpen(ciphertext: Buffer, nonce: Buffer, key: Buffer): Buffer {
 }
 
 function calcClientToServerKey(discriminator: Buffer, sharedSecret_ab: Buffer, sharedSecret_aB: Buffer, sharedSecret_Ab: Buffer, serverLongtermPk: Buffer, serverEphemeralPk: Buffer): [Buffer, Buffer] {
-    const inner = sha256(sha256(Buffer.concat([discriminator, sharedSecret_ab, sharedSecret_aB, sharedSecret_Ab])));
-    const clientToServerKey = sha256(Buffer.concat([inner, serverLongtermPk]));
+    const inner = hashFn(hashFn(Buffer.concat([discriminator, sharedSecret_ab, sharedSecret_aB, sharedSecret_Ab])));
+    const clientToServerKey = hashFn(Buffer.concat([inner, serverLongtermPk]));
     const clientNonce = hmac(serverEphemeralPk, discriminator).slice(0, 24);
     return [clientToServerKey, clientNonce];
 }
 
 function calcServerToClientKey(discriminator: Buffer, sharedSecret_ab: Buffer, sharedSecret_aB: Buffer, sharedSecret_Ab: Buffer, clientLongtermPk: Buffer, clientEphemeralPk: Buffer): [Buffer, Buffer] {
-    const inner = sha256(sha256(Buffer.concat([discriminator, sharedSecret_ab, sharedSecret_aB, sharedSecret_Ab])));
-    const serverToClientKey = sha256(Buffer.concat([inner, clientLongtermPk]));
+    const inner = hashFn(hashFn(Buffer.concat([discriminator, sharedSecret_ab, sharedSecret_aB, sharedSecret_Ab])));
+    const serverToClientKey = hashFn(Buffer.concat([inner, clientLongtermPk]));
     const serverNonce = hmac(clientEphemeralPk, discriminator).slice(0, 24);
     return [serverToClientKey, serverNonce];
 }
 
-function sha256(buf: Buffer): Buffer {
-    const h = crypto.createHash("sha256");
-    h.update(buf);
-    return h.digest();
+function hashFn(message: Buffer): Buffer {
+    const digest = sodium.crypto_generichash(32, message);
+    return Buffer.from(digest);
 }
 
 /**
@@ -176,7 +170,7 @@ function message3(detachedSigA: Buffer, discriminator: Buffer, clientLongtermPk:
     }
     const message = Buffer.concat([detachedSigA, clientLongtermPk, clientData]);
     const nonce = Buffer.alloc(24).fill(0);
-    const key = sha256(Buffer.concat([discriminator, sharedSecret_ab, sharedSecret_aB]));
+    const key = hashFn(Buffer.concat([discriminator, sharedSecret_ab, sharedSecret_aB]));
     return Buffer.from(secretBox(message, nonce, key));
 }
 
@@ -189,7 +183,7 @@ function message3(detachedSigA: Buffer, discriminator: Buffer, clientLongtermPk:
  */
 function verifyMessage3(ciphertext: Buffer, serverLongtermPk: Buffer, discriminator: Buffer, sharedSecret_ab: Buffer, sharedSecret_aB: Buffer): [Buffer, Buffer, Buffer] {
     const nonce = Buffer.alloc(24).fill(0);
-    const key = sha256(Buffer.concat([discriminator, sharedSecret_ab, sharedSecret_aB]));
+    const key = hashFn(Buffer.concat([discriminator, sharedSecret_ab, sharedSecret_aB]));
     const msg3 = secretBoxOpen(ciphertext, nonce, key);
 
     if (msg3.length !== 64 + 32 + 96) {
@@ -199,7 +193,7 @@ function verifyMessage3(ciphertext: Buffer, serverLongtermPk: Buffer, discrimina
     const detachedSigA = msg3.slice(0, 64);
     const clientLongtermPk = msg3.slice(64, 64+32);
     const clientData = msg3.slice(64+32);
-    const msg = Buffer.concat([discriminator, serverLongtermPk, sha256(sharedSecret_ab)]);
+    const msg = Buffer.concat([discriminator, serverLongtermPk, hashFn(sharedSecret_ab)]);
 
     if (!signVerifyDetached(msg, detachedSigA, clientLongtermPk)) {
         throw "Signature does not match";
@@ -221,9 +215,9 @@ function message4(discriminator: Buffer, detachedSigA: Buffer, clientLongtermPk:
     if (serverData.length < 96) {
         serverData = Buffer.concat([serverData, Buffer.alloc(96 - serverData.length).fill(0)]);
     }
-    const detachedSigB = signDetached(Buffer.concat([discriminator, detachedSigA, clientLongtermPk, sha256(sharedSecret_ab)]), serverLongtermSk);
+    const detachedSigB = signDetached(Buffer.concat([discriminator, detachedSigA, clientLongtermPk, hashFn(sharedSecret_ab)]), serverLongtermSk);
     const nonce = Buffer.alloc(24).fill(0);
-    const key = sha256(Buffer.concat([discriminator, sharedSecret_ab, sharedSecret_aB, sharedSecret_Ab]));
+    const key = hashFn(Buffer.concat([discriminator, sharedSecret_ab, sharedSecret_aB, sharedSecret_Ab]));
     return secretBox(Buffer.concat([detachedSigB, serverData]), nonce, key);
 }
 
@@ -234,11 +228,11 @@ function message4(discriminator: Buffer, detachedSigA: Buffer, clientLongtermPk:
  */
 function verifyMessage4(ciphertext: Buffer, detachedSigA: Buffer, clientLongtermPk: Buffer, serverLongtermPk: Buffer, discriminator: Buffer, sharedSecret_ab: Buffer, sharedSecret_aB: Buffer, sharedSecret_Ab: Buffer): Buffer {
     const nonce = Buffer.alloc(24).fill(0);
-    const key = sha256(Buffer.concat([discriminator, sharedSecret_ab, sharedSecret_aB, sharedSecret_Ab]));
+    const key = hashFn(Buffer.concat([discriminator, sharedSecret_ab, sharedSecret_aB, sharedSecret_Ab]));
     const unboxed = secretBoxOpen(ciphertext, nonce, key);
     const detachedSigB = unboxed.slice(0, 64);
     const serverData = unboxed.slice(64, 64+96);
-    const msg = Buffer.concat([discriminator, detachedSigA, clientLongtermPk, sha256(sharedSecret_ab)]);
+    const msg = Buffer.concat([discriminator, detachedSigA, clientLongtermPk, hashFn(sharedSecret_ab)]);
     if (!signVerifyDetached(msg, detachedSigB, serverLongtermPk)) {
         throw "Signature does not match";
     }
@@ -254,8 +248,10 @@ function verifyMessage4(ciphertext: Buffer, detachedSigA: Buffer, clientLongterm
 export async function HandshakeAsClient(client: Client, clientLongtermSk: Buffer, clientLongtermPk: Buffer, serverLongtermPk: Buffer, discriminator: Buffer, clientData?: Function | Buffer): Promise<{clientToServerKey: Buffer, clientNonce: Buffer, serverToClientKey: Buffer, serverNonce: Buffer, serverData: Buffer}> {
     return new Promise( async (resolve, reject) => {
         try {
+            await sodium.ready;
+
             // Make sure the discriminator is constant length
-            discriminator = sha256(discriminator);
+            discriminator = hashFn(discriminator);
 
             const clientEphemeralKeys = createEphemeralKeys();
             const clientEphemeralPk = clientEphemeralKeys.publicKey;
@@ -273,7 +269,7 @@ export async function HandshakeAsClient(client: Client, clientLongtermSk: Buffer
             const sharedSecret_aB = clientSharedSecret_aB(clientEphemeralSk, serverLongtermPk);
 
             // Second message from client (message 3)
-            const detachedSigA = signDetached(Buffer.concat([discriminator, serverLongtermPk, sha256(sharedSecret_ab)]), clientLongtermSk);
+            const detachedSigA = signDetached(Buffer.concat([discriminator, serverLongtermPk, hashFn(sharedSecret_ab)]), clientLongtermSk);
             if (typeof(clientData) === "function") {
                 // Dynamically compute client data based on signature A.
                 // This provides a way for client to provide PoW to the server if the server requires that due to some ongoing DDoS.
@@ -311,8 +307,10 @@ export async function HandshakeAsClient(client: Client, clientLongtermSk: Buffer
 export async function HandshakeAsServer(client: Client, serverLongtermSk: Buffer, serverLongtermPk: Buffer, discriminator: Buffer, allowedClientKey?: Function | Buffer[], serverData?: Function | Buffer): Promise<{clientLongtermPk: Buffer, clientToServerKey: Buffer, clientNonce: Buffer, serverToClientKey: Buffer, serverNonce: Buffer, clientData: Buffer}> {
     return new Promise( async (resolve, reject) => {
         try {
+            await sodium.ready;
+
             // Make sure the discriminator is constant length
-            discriminator = sha256(discriminator);
+            discriminator = hashFn(discriminator);
 
             const serverEphemeralKeys = createEphemeralKeys();
             const serverEphemeralPk = serverEphemeralKeys.publicKey;
