@@ -231,10 +231,10 @@ function verifyMessage4(ciphertext: Buffer, detachedSigA: Buffer, clientLongterm
 /**
  * On successful handshake return the arbitrary server 96 byte data buffer.
  * On unsuccessful throw exception.
- * @return Promise <[clientToServerKey, clientNonce, serverToClientKey, serverNonce, serverData]>
+ * @return Promise <{clientToServerKey, clientNonce, serverToClientKey, serverNonce, serverData}>
  * @throws
  */
-export async function HandshakeAsClient(client: Client, clientLongtermSk: Buffer, clientLongtermPk: Buffer, serverLongtermPk: Buffer, discriminator: Buffer, clientData?: Function | Buffer): Promise<[Buffer, Buffer, Buffer, Buffer, Buffer]> {
+export async function HandshakeAsClient(client: Client, clientLongtermSk: Buffer, clientLongtermPk: Buffer, serverLongtermPk: Buffer, discriminator: Buffer, clientData?: Function | Buffer): Promise<{clientToServerKey: Buffer, clientNonce: Buffer, serverToClientKey: Buffer, serverNonce: Buffer, serverData: Buffer}> {
     return new Promise( async (resolve, reject) => {
         try {
             const clientEphemeralKeys = createEphemeralKeys();
@@ -274,7 +274,7 @@ export async function HandshakeAsClient(client: Client, clientLongtermSk: Buffer
             const [clientToServerKey, clientNonce] = calcClientToServerKey(discriminator, sharedSecret_ab, sharedSecret_aB, sharedSecret_Ab, serverLongtermPk, serverEphemeralPk);
             const [serverToClientKey, serverNonce] = calcServerToClientKey(discriminator, sharedSecret_ab, sharedSecret_aB, sharedSecret_Ab, clientLongtermPk, clientEphemeralPk);
 
-            resolve([clientToServerKey, clientNonce, serverToClientKey, serverNonce, serverData]);
+            resolve({clientToServerKey, clientNonce, serverToClientKey, serverNonce, serverData});
         }
         catch(e) {
             reject(e);
@@ -285,10 +285,10 @@ export async function HandshakeAsClient(client: Client, clientLongtermSk: Buffer
 /**
  * On successful handshake return the client longterm public key the box keys and nonces and the arbitrary client 96 byte data buffer.
  * On failed handshake throw exception.
- * @return Promise<[clientLongTermPk, clientToServerKey, clientNonce, serverToClientKey, serverNonce, clientData]>
+ * @return Promise<{clientLongtermPk, clientToServerKey, clientNonce, serverToClientKey, serverNonce, clientData}>
  * @throws
  */
-export async function HandshakeAsServer(client: Client, serverLongtermSk: Buffer, serverLongtermPk: Buffer, discriminator: Buffer, allowedClientKey?: Function | Buffer[], serverData?: Function | Buffer): Promise<[Buffer, Buffer, Buffer, Buffer, Buffer, Buffer]> {
+export async function HandshakeAsServer(client: Client, serverLongtermSk: Buffer, serverLongtermPk: Buffer, discriminator: Buffer, allowedClientKey?: Function | Buffer[], serverData?: Function | Buffer): Promise<{clientLongtermPk: Buffer, clientToServerKey: Buffer, clientNonce: Buffer, serverToClientKey: Buffer, serverNonce: Buffer, clientData: Buffer}> {
     return new Promise( async (resolve, reject) => {
         try {
             const serverEphemeralKeys = createEphemeralKeys();
@@ -350,7 +350,7 @@ export async function HandshakeAsServer(client: Client, serverLongtermSk: Buffer
             const [serverToClientKey, serverNonce] = calcServerToClientKey(discriminator, sharedSecret_ab, sharedSecret_aB, sharedSecret_Ab, clientLongtermPk, clientEphemeralPk);
 
             // Done
-            resolve([clientLongtermPk, clientToServerKey, clientNonce, serverToClientKey, serverNonce, clientData]);
+            resolve({clientLongtermPk, clientToServerKey, clientNonce, serverToClientKey, serverNonce, clientData});
         }
         catch(e) {
             reject(e);

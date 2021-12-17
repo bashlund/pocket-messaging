@@ -193,7 +193,7 @@ export class Messaging {
      *  @param stream set to true if expecting multiple replies
      *  @param timeoutStream milliseconds to wait for secondary replies (undefined or 0 means forever)
      */
-    public send(target: Buffer | string, data?: Buffer, timeout?: number, stream?: boolean, timeoutStream?: number): EventEmitter | undefined {
+    public send(target: Buffer | string, data?: Buffer, timeout?: number, stream?: boolean, timeoutStream?: number): {eventEmitter: EventEmitter, msgId: Buffer} | undefined {
         if (!this.isOpened || this.isClosed) {
             return;
         }
@@ -245,7 +245,7 @@ export class Messaging {
             replyCounter: 0,
         };
 
-        return eventEmitter;
+        return {eventEmitter, msgId};
     }
 
     protected getNow(): number {
@@ -711,9 +711,9 @@ export class Messaging {
 * Because EventEmitter3 module doesn't seem to support the async/await promise feature of nodejs events once() function.
 */
 export function once(eventEmitter: EventEmitter, eventName: string | symbol): Promise<any> {
-    return new Promise( (accept, reject) => {
+    return new Promise( (resolve, reject) => {
         try {
-            eventEmitter.once(eventName, accept);
+            eventEmitter.once(eventName, resolve);
         }
         catch(e) {
             reject(e);
