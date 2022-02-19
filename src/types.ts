@@ -1,5 +1,15 @@
 import EventEmitter from "eventemitter3";
 
+/**
+ * A single message cannot exceed 65535 bytes in total.
+ */
+export const MESSAGE_MAX_BYTES = 65535;
+
+export type SendReturn = {
+    eventEmitter?: EventEmitter,
+    msgId: Buffer,
+};
+
 export type SentMessage = {
     timestamp: number,
     msgId: Buffer,
@@ -8,6 +18,13 @@ export type SentMessage = {
     timeoutStream: number,
     eventEmitter: EventEmitter,
     replyCounter: number,
+    isCleared: boolean,  // If true then all timeouts on this message are paused until next message arrives
+};
+
+export enum ExpectingReply {
+    NONE = 0,
+    SINGLE = 1,
+    MULTIPLE = 2,
 };
 
 /**
@@ -77,8 +94,8 @@ export type ErrorEvent = {
     error?: Buffer
 };
 
-export type MixedEvent = {
-    type: string;
+export type AnyEvent = {
+    type: EventType;
     event: ReplyEvent | TimeoutEvent | CloseEvent | ErrorEvent
 };
 
@@ -116,12 +133,12 @@ export enum EventType {
     TIMEOUT = "timeout",
 
     /**
-     * Mixed event emitted on message specific event emitters for the events:
+     * Any event emitted on message specific event emitters for the events:
      * REPLY,
      * ERROR,
      * CLOSE,
      * TIMEOUT
      * This is useful for having a catch-all event handler when waiting on replies.
      */
-    MIXED = "mixed",
+    ANY = "any",
 }

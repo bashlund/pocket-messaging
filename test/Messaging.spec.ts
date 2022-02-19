@@ -136,7 +136,7 @@ export class MessagingSpec {
             accept();
         });
 
-        let buf = await once(this.eventEmitter1, "mixed");
+        let buf = await once(this.eventEmitter1, "any");
         await p;
     }
 
@@ -168,7 +168,7 @@ export class MessagingSpec {
         expect.toBeTrue(ee2a !== undefined, "Expecting eventemitter returned");
         if (!ee2a) return;
 
-        const reply = await once(ee2a.eventEmitter, "mixed");  // this also catched close event
+        const reply = await once(ee2a.eventEmitter, "any");  // this also catched close event
         expect.toBeTrue(reply !== undefined);
         expect.toBeTrue(reply.type === "close");
     }
@@ -536,7 +536,7 @@ export class MessagingSocketClose {
             //@ts-ignore protected function
             messaging.emitEvent = function(emitters: EventEmitter[], type: EventType, arg: any) {
                 assert(emitters)
-                assert(type == EventType.CLOSE || type == EventType.MIXED);
+                assert(type == EventType.CLOSE || type == EventType.ANY);
                 assert(arg);
             };
             assert(messaging.isClosed == false);

@@ -13,9 +13,12 @@ import {
     ReplyEvent,
     TimeoutEvent,
     ErrorEvent,
-    MixedEvent,
+    AnyEvent,
     CloseEvent,
     EventType,
+    MESSAGE_MAX_BYTES,
+    SendReturn,
+    ExpectingReply,
 } from "./types";
 
 export class Messaging {
@@ -131,7 +134,7 @@ export class Messaging {
     /**
      * Remove a stored pending message so that it cannot receive any more replies.
      */
-    public cancelPendingMessage(msgId: Buffer) {
+    public cancelPendingMessage = (msgId: Buffer) => {
         delete this.pendingReply[msgId.toString("hex")];
     }
 
@@ -187,17 +190,35 @@ export class Messaging {
 
     /**
      * Send message to remote.
+     *
      * The returned EventEmitter can be hooked as eventEmitter.on("reply", fn) or
      *  const data: ReplyEvent = await once(eventEmitter, "reply");
-     *  Other events are "close" (CloseEvent) and "mixed" which trigger both for "reply", "close" and "error" (ErrorEvent). There is also "timeout" (TimeoutEvent).
+     *  Other events are "close" (CloseEvent) and "any" which trigger both for "reply", "close" and "error" (ErrorEvent). There is also "timeout" (TimeoutEvent).
      *
-     *  @param timeout milliseconds to wait for the first reply (undefined or 0 means forever)
-     *  @param stream set to true if expecting multiple replies
-     *  @param timeoutStream milliseconds to wait for secondary replies (undefined or 0 means forever)
+     * A timeouted message is removed from memory and a TIMEOUT is emitted.
+     *
+     * @param target: Buffer | string either set as routing target as string, or as message ID in reply to (as buffer).
+     *  The receiving Messaging instance will check if target matches a msg ID which is waiting for a reply and in such case the message till be emitted on that EventEmitter,
+     *  or else it will pass it to the router to see if it matches some route.
+     * @param data: Buffer of data to be sent. Note that data cannot exceed MESSAGE_MAX_BYTES (64 KiB).
+     * @param timeout milliseconds to wait for the first reply (defaults to undefined)
+     *     undefined means we are not expecting a reply
+     *     0 or greater means that we are expecting a reply, 0 means wait forever
+     * @param stream set to true if expecting multiple replies (defaults to false)
+     *     This requires that timeout is set to 0 or greater
+     * @param timeoutStream milliseconds to wait for secondary replies, 0 means forever (default).
+     *     Only relevant if expecting multiple replies (stream = true).
+     * @return SendReturn | undefined
+     *     msgId is always set
+     *     eventEmitter property is set if expecting reply
      */
-    public send(target: Buffer | string, data?: Buffer, timeout?: number, stream?: boolean, timeoutStream?: number): {eventEmitter: EventEmitter, msgId: Buffer} | undefined {
-        if (!this.isOpened || this.isClosed) {
-            return;
+    public send(target: Buffer | string, data?: Buffer, timeout: number | undefined = undefined, stream: boolean = false, timeoutStream: number = 0): SendReturn | undefined {
+        if (!this.isOpened) {
+            return undefined;
+        }
+
+        if (this.isClosed) {
+            return undefined;
         }
 
         if (typeof target === "string") {
@@ -206,17 +227,17 @@ export class Messaging {
 
         data = data ?? Buffer.alloc(0);
 
-        if (data.length > 65535) {
-            throw "Data chunk to send cannot exceed 65535 bytes";
+        if (data.length > MESSAGE_MAX_BYTES) {
+            throw `Data chunk to send cannot exceed ${MESSAGE_MAX_BYTES} bytes. Trying to send ${data.length} bytes`;
         }
-
-        const msgId = this.generateMsgId();
-
-        const expectingReply = typeof timeout === "number" ? (stream ? 2 : 1) : 0;
 
         if (target.length > 255) {
             throw "target length cannot exceed 255 bytes";
         }
+
+        const msgId = this.generateMsgId();
+
+        const expectingReply = typeof timeout === "number" ? (stream ? ExpectingReply.MULTIPLE : ExpectingReply.SINGLE) : ExpectingReply.NONE;
 
         const header: Header = {
             version: 0,
@@ -231,8 +252,8 @@ export class Messaging {
         this.isBusyOut++;
         setImmediate(this.processOutqueue);
 
-        if (expectingReply === 0) {
-            return undefined;
+        if (expectingReply === ExpectingReply.NONE) {
+            return {msgId};
         }
 
         const eventEmitter = new EventEmitter();
@@ -243,8 +264,9 @@ export class Messaging {
             timeout: Number(timeout),
             stream: Boolean(stream),
             eventEmitter,
-            timeoutStream: Number(timeoutStream),
+            timeoutStream: timeoutStream,
             replyCounter: 0,
+            isCleared: false,
         };
 
         return {eventEmitter, msgId};
@@ -383,11 +405,11 @@ export class Messaging {
         };
         this.emitEvent(eventEmitters, EventType.ERROR, errorEvent);
 
-        const mixedEvent: MixedEvent = {
+        const anyEvent: AnyEvent = {
             type: EventType.ERROR,
             event: errorEvent
         };
-        this.emitEvent(eventEmitters, EventType.MIXED, mixedEvent);
+        this.emitEvent(eventEmitters, EventType.ANY, anyEvent);
     }
 
     /**
@@ -399,15 +421,16 @@ export class Messaging {
         }
         this.isClosed = true;
         const eventEmitters = this.getAllEventEmitters();
+        this.pendingReply = {};  // Remove all from memory
         const closeEvent: CloseEvent = {
             hadError: Boolean(hadError)
         };
         this.emitEvent(eventEmitters, EventType.CLOSE, closeEvent);
-        const mixedEvent: MixedEvent = {
+        const anyEvent: AnyEvent = {
             type: EventType.CLOSE,
             event: closeEvent
         };
-        this.emitEvent(eventEmitters, EventType.MIXED, mixedEvent);
+        this.emitEvent(eventEmitters, EventType.ANY, anyEvent);
     }
 
     /**
@@ -531,7 +554,7 @@ export class Messaging {
                 target: header.target,
                 msgId: header.msgId,
                 data,
-                expectingReply: header.config & 3,  // other config bits are reserved for future use
+                expectingReply: header.config & (ExpectingReply.SINGLE + ExpectingReply.MULTIPLE),  // other config bits are reserved for future use
             };
 
             this.incomingQueue.messages.push(inMessage);
@@ -567,6 +590,7 @@ export class Messaging {
 
                 if (pendingReply) {
                     pendingReply.replyCounter++;
+                    pendingReply.isCleared = false;
                     if (pendingReply.stream) {
                         // Expecting many replies, update timeout activity timestamp.
                         pendingReply.timestamp = this.getNow();
@@ -585,20 +609,36 @@ export class Messaging {
                     };
                     this.emitEvent([pendingReply.eventEmitter],
                                    EventType.REPLY, replyEvent);
-                    const mixedEvent: MixedEvent = {
+                    const anyEvent: AnyEvent = {
                         type: EventType.REPLY,
                         event: replyEvent
                     };
                     this.emitEvent([pendingReply.eventEmitter],
-                                   EventType.MIXED, mixedEvent);
+                                   EventType.ANY, anyEvent);
                 }
                 else {
                     // This is not a reply message (or the message was cancelled).
                     // Dispatch on main event emitter.
-                    // Note that if this is a reply event on a removed pending
-                    // message then the reply will get routed on the main
-                    // event emitter (but likely then ignored).
-                    // TODO: add alphanumric check on target string
+                    // Do alphanumric check on target string. A-Z, a-z, 0-9, ._-
+                    if (inMessage.target.some( char => {
+                        if (char >= 49 && char <= 57) {
+                            return false;
+                        }
+                        if (char >= 65 && char <= 90) {
+                            return false;
+                        }
+                        if (char >= 97 && char <= 122) {
+                            return false;
+                        }
+                        if ([45, 46, 95].includes(char)) {
+                            return false;
+                        }
+                        return true; // non alpha-numeric found
+                        })) {
+                        // Non alphanumeric found
+                        // Ignore this message
+                        return;
+                    }
                     const routeEvent: RouteEvent = {
                         target: inMessage.target.toString(),
                         fromMsgId: inMessage.msgId,
@@ -677,12 +717,12 @@ export class Messaging {
             };
             this.emitEvent([sentMessage.eventEmitter],
                            EventType.TIMEOUT, timeoutEvent);
-            const mixedEvent: MixedEvent = {
+            const anyEvent: AnyEvent = {
                 type: EventType.TIMEOUT,
                 event: timeoutEvent
             };
             this.emitEvent([sentMessage.eventEmitter],
-                           EventType.MIXED, mixedEvent);
+                           EventType.ANY, anyEvent);
         }
 
         setTimeout(this.checkTimeouts, 500);
@@ -693,6 +733,9 @@ export class Messaging {
         const now = this.getNow();
         for (let msgId in this.pendingReply) {
             const sentMessage = this.pendingReply[msgId];
+            if (sentMessage.isCleared) {
+                continue;
+            }
             if (sentMessage.replyCounter === 0) {
                 if (sentMessage.timeout && now > sentMessage.timestamp + sentMessage.timeout) {
                     timeouted.push(sentMessage);
@@ -706,6 +749,17 @@ export class Messaging {
         }
         return timeouted;
     }
+
+    /**
+     * This pauses all timeouts for a message until the next message arrives then timeouts are re-activated (if set initially ofc).
+     * This could be useful when expecting a never ending stream of messages where chunks could be time apart.
+     */
+    public clearTimeout = (msgId: Buffer) => {
+        const sentMessage = this.pendingReply[msgId.toString("hex")];
+        if (sentMessage) {
+            sentMessage.isCleared = true;
+        }
+    };
 }
 
 /**

@@ -21,7 +21,7 @@ function Equals(a: Buffer, b: Buffer): boolean {
     for (let i=0; i<a.length; i++) {
         result |= a[i] ^ b[i];
     }
-    return result === 0;  // true if buffers are equals
+    return result === 0;  // true if buffers are equal
 }
 
 function createEphemeralKeys(): KeyPair {
@@ -334,7 +334,7 @@ export async function HandshakeAsServer(client: Client, serverLongtermSk: Buffer
             if (typeof(serverData) === "function") {
                 // The server can verify and/or check the client data.
                 // This could be something like a PoW check on the detachedSigA to prevent DDoS attacks.
-                // If it dislikes the clientData then it must throw an exception and abort this handshake.
+                // If it dislikes the clientData then it must throw an exception to abort this handshake.
                 serverData = await serverData(clientData, detachedSigA);
             }
             if (!Buffer.isBuffer(serverData)) {

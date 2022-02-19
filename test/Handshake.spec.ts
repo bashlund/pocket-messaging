@@ -30,14 +30,6 @@ export class HandshakeSpec {
         this.keyPairServer = genKeyPair();
     }
 
-    //createKeys(): KeyPair {
-        //const keyPair = nacl.sign.keyPair();
-        //return {
-            //publicKey: Buffer.from(keyPair.publicKey),
-            //secretKey: Buffer.from(keyPair.secretKey)
-        //};
-    //}
-
     @Test()
     public async handshake() {
         const discriminator = Buffer.from("hello");
