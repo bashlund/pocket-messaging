@@ -6,6 +6,10 @@
 import sodium from "libsodium-wrappers";
 import {Client, ByteSize} from "../../pocket-sockets";
 
+import {
+    HandshakeResult,
+} from "./types";
+
 type KeyPair = {
     publicKey: Buffer,
     secretKey: Buffer
@@ -245,7 +249,7 @@ function verifyMessage4(ciphertext: Buffer, detachedSigA: Buffer, clientLongterm
  * @return Promise <{clientToServerKey, clientNonce, serverToClientKey, serverNonce, serverData}>
  * @throws
  */
-export async function HandshakeAsClient(client: Client, clientLongtermSk: Buffer, clientLongtermPk: Buffer, serverLongtermPk: Buffer, discriminator: Buffer, clientData?: Function | Buffer): Promise<{clientToServerKey: Buffer, clientNonce: Buffer, serverToClientKey: Buffer, serverNonce: Buffer, serverData: Buffer}> {
+export async function HandshakeAsClient(client: Client, clientLongtermSk: Buffer, clientLongtermPk: Buffer, serverLongtermPk: Buffer, discriminator: Buffer, clientData?: Function | Buffer): Promise<HandshakeResult> {
     return new Promise( async (resolve, reject) => {
         try {
             await sodium.ready;
@@ -290,7 +294,7 @@ export async function HandshakeAsClient(client: Client, clientLongtermSk: Buffer
             const [clientToServerKey, clientNonce] = calcClientToServerKey(discriminator, sharedSecret_ab, sharedSecret_aB, sharedSecret_Ab, serverLongtermPk, serverEphemeralPk);
             const [serverToClientKey, serverNonce] = calcServerToClientKey(discriminator, sharedSecret_ab, sharedSecret_aB, sharedSecret_Ab, clientLongtermPk, clientEphemeralPk);
 
-            resolve({clientToServerKey, clientNonce, serverToClientKey, serverNonce, serverData});
+            resolve({peerLongtermPk: serverLongtermPk, clientToServerKey, clientNonce, serverToClientKey, serverNonce, peerData: serverData});
         }
         catch(e) {
             reject(e);
@@ -304,7 +308,7 @@ export async function HandshakeAsClient(client: Client, clientLongtermSk: Buffer
  * @return Promise<{clientLongtermPk, clientToServerKey, clientNonce, serverToClientKey, serverNonce, clientData}>
  * @throws
  */
-export async function HandshakeAsServer(client: Client, serverLongtermSk: Buffer, serverLongtermPk: Buffer, discriminator: Buffer, allowedClientKey?: Function | Buffer[], serverData?: Function | Buffer): Promise<{clientLongtermPk: Buffer, clientToServerKey: Buffer, clientNonce: Buffer, serverToClientKey: Buffer, serverNonce: Buffer, clientData: Buffer}> {
+export async function HandshakeAsServer(client: Client, serverLongtermSk: Buffer, serverLongtermPk: Buffer, discriminator: Buffer, allowedClientKey?: Function | Buffer[], serverData?: Function | Buffer): Promise<HandshakeResult> {
     return new Promise( async (resolve, reject) => {
         try {
             await sodium.ready;
@@ -372,7 +376,7 @@ export async function HandshakeAsServer(client: Client, serverLongtermSk: Buffer
             const [serverToClientKey, serverNonce] = calcServerToClientKey(discriminator, sharedSecret_ab, sharedSecret_aB, sharedSecret_Ab, clientLongtermPk, clientEphemeralPk);
 
             // Done
-            resolve({clientLongtermPk, clientToServerKey, clientNonce, serverToClientKey, serverNonce, clientData});
+            resolve({peerLongtermPk: clientLongtermPk, clientToServerKey, clientNonce, serverToClientKey, serverNonce, peerData: clientData});
         }
         catch(e) {
             reject(e);

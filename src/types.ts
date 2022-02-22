@@ -142,3 +142,12 @@ export enum EventType {
      */
     ANY = "any",
 }
+
+export type HandshakeResult = {
+    peerLongtermPk: Buffer,
+    clientToServerKey: Buffer,
+    clientNonce: Buffer,
+    serverToClientKey: Buffer,
+    serverNonce: Buffer,
+    peerData: Buffer,
+};
