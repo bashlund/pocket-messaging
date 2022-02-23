@@ -155,7 +155,7 @@ export class MessagingSpec {
         process.nextTick( async () => {
             const ee1a = this.messaging1.send("ping", Buffer.from("A"), 10000, true);
             expect.toBeTrue(ee1a !== undefined, "Expecting eventemitter returned");
-            if (!ee1a) return;  //@ts-chillax
+            if (!ee1a || !ee1a.eventEmitter) return;  //@ts-chillax
 
             const reply = await once(ee1a.eventEmitter, "reply");
 
@@ -166,7 +166,7 @@ export class MessagingSpec {
         const event = await once(ee2, "route");
         const ee2a = this.messaging2.send(event.fromMsgId, Buffer.from("B"), 10000);
         expect.toBeTrue(ee2a !== undefined, "Expecting eventemitter returned");
-        if (!ee2a) return;
+        if (!ee2a || !ee2a.eventEmitter) return;
 
         const reply = await once(ee2a.eventEmitter, "any");  // this also catched close event
         expect.toBeTrue(reply !== undefined);
@@ -407,7 +407,8 @@ export class MessagingSend {
             const replyStatus = messaging.send(Buffer.alloc(255).fill(255));
             assert(messaging.outgoingQueue.unencrypted.length == 1 + 1);
             assert(Object.keys(messaging.pendingReply).length == 0);
-            assert(replyStatus == undefined);
+            assert(replyStatus !== undefined);
+            assert(replyStatus && replyStatus.msgId !== undefined);
         });
     }
 
@@ -828,7 +829,7 @@ export class MessagingDispatchIncoming {
             //@ts-ignore protected function
             messaging.decodeHeader = function() {
                 messaging.incomingQueue.decrypted.length = 0;
-                return [{version: 0, target: "tgt", dataLength: 3, config: false}, Buffer.from("")];
+                return [{version: 0, target: Buffer.from("tgt"), dataLength: 3, config: false}, Buffer.from("")];
             }
 
             //@ts-ignore protected function
@@ -859,7 +860,7 @@ export class MessagingDispatchIncoming {
             //@ts-ignore protected function
             messaging.decodeHeader = function() {
                 messaging.incomingQueue.decrypted.length = 0;
-                return [{version: 0, target: "tgt", dataLength: 3, config: false}, Buffer.from("")];
+                return [{version: 0, target: Buffer.from("tgt"), dataLength: 3, config: false}, Buffer.from("")];
             }
 
             //@ts-ignore protected function
@@ -890,7 +891,7 @@ export class MessagingDispatchIncoming {
             //@ts-ignore protected function
             messaging.decodeHeader = function() {
                 messaging.incomingQueue.decrypted.length = 0;
-                return [{version: 0, target: "tgt", dataLength: 3, config: false}, Buffer.from("")];
+                return [{version: 0, target: Buffer.from("tgt"), dataLength: 3, config: false}, Buffer.from("")];
             }
 
             //@ts-ignore protected function
@@ -1089,7 +1090,8 @@ export class MessagingCheckTimeouts {
                     timeoutStream: 0,
                     replyCounter: 0,
                     stream: false,
-                    eventEmitter: new EventEmitter()
+                    eventEmitter: new EventEmitter(),
+                    isCleared: false,
                 });
                 return messages;
             }

@@ -144,10 +144,10 @@ export enum EventType {
 }
 
 export type HandshakeResult = {
-    peerLongtermPk: Buffer,
-    clientToServerKey: Buffer,
-    clientNonce: Buffer,
-    serverToClientKey: Buffer,
-    serverNonce: Buffer,
-    peerData: Buffer,
+    peerLongtermPk: Buffer,     // The handshaked longterm public key of the peer
+    clientToServerKey: Buffer,  // box key
+    clientNonce: Buffer,        // box nonce
+    serverToClientKey: Buffer,  // box key
+    serverNonce: Buffer,        // box nonce
+    peerData: Buffer,           // arbitrary data provided by peer
 };

@@ -1,6 +1,7 @@
 /**
  * A four way client-server handshake, as excellently described in https://ssbc.github.io/scuttlebutt-protocol-guide/,
- * with an added arbitrary 96 byte client/server data transmission.
+ * with one added version byte and functionality to mitigate ddos attacks,
+ * and added client/server data exchange for swapping application parameters.
  */
 
 import sodium from "libsodium-wrappers";
@@ -14,6 +15,9 @@ type KeyPair = {
     publicKey: Buffer,
     secretKey: Buffer
 };
+
+// Single byte depicting the version of the handshake protocol.
+const Version = Buffer.from([0]);
 
 // Compare two buffers in constant time
 function Equals(a: Buffer, b: Buffer): boolean {
@@ -110,13 +114,13 @@ function hashFn(message: Buffer): Buffer {
 }
 
 /**
- * Client creates message 1 (64 bytes).
+ * Client creates message 1 (65 bytes).
  *
- * @return 32 bytes hmac + 32 bytes clientEphemeralPk
+ * @return 1 byte version + 32 bytes hmac + 32 bytes clientEphemeralPk
  */
 function message1(clientEphemeralPk: Buffer, discriminator: Buffer): Buffer {
     const clientHmac = hmac(clientEphemeralPk, discriminator);
-    return Buffer.concat([clientHmac, clientEphemeralPk]);
+    return Buffer.concat([Version, clientHmac, clientEphemeralPk]);
 }
 
 /**
@@ -125,8 +129,18 @@ function message1(clientEphemeralPk: Buffer, discriminator: Buffer): Buffer {
  * @throws
  */
 function verifyMessage1(msg1: Buffer, discriminator: Buffer): Buffer {
-    const hmac = msg1.slice(0, 32);
-    const clientEphemeralPk = msg1.slice(32, 64);
+    if (msg1.length !== 65) {
+        throw "Incoming message 1 must be 65 bytes long";
+    }
+    const version = msg1.slice(0, 1);
+
+    // Check so versions match.
+    if (!Equals(version, Version)) {
+        throw "Mismatching version of the handshake";
+    }
+
+    const hmac = msg1.slice(1, 1+32);
+    const clientEphemeralPk = msg1.slice(1+32, 1+32+32);
     if (assertHmac(hmac, clientEphemeralPk, discriminator)) {
         return clientEphemeralPk;
     }
@@ -134,35 +148,45 @@ function verifyMessage1(msg1: Buffer, discriminator: Buffer): Buffer {
 }
 
 /**
- * Server creates message 2 (64 bytes).
+ * Server creates message 2 (65 bytes).
  * @return msg2: Buffer
  */
-function message2(serverEphemeralPk: Buffer, discriminator: Buffer): Buffer {
-    const serverHmac = hmac(serverEphemeralPk, discriminator);
-    return Buffer.concat([serverHmac, serverEphemeralPk]);
+function message2(difficulty: Buffer, serverEphemeralPk: Buffer, discriminator: Buffer): Buffer {
+    if (difficulty.length !== 1) {
+        throw "Difficulty must be of length 1 bytes";
+    }
+    if (serverEphemeralPk.length !== 32) {
+        throw "ServerEphemeralPk must be of length 32 bytes";
+    }
+    const serverHmac = hmac(Buffer.concat([difficulty, serverEphemeralPk]), discriminator);
+    return Buffer.concat([serverHmac, difficulty, serverEphemeralPk]);
 }
 
 /**
- * Client verifies first server message (message 2).
+ * Client verifies first server message (message 2: 65 bytes).
  * Return server ephemeral public key on success.
  * Throws on error.
  * @return serverEphemeralPk
  * @throws
  */
-function verifyMessage2(msg2: Buffer, discriminator: Buffer): Buffer {
+function verifyMessage2(msg2: Buffer, discriminator: Buffer): [Buffer, Buffer] {
+    if (msg2.length !== 65) {
+        throw "Incoming message 2 must be of 65 bytes";
+    }
     const hmac = msg2.slice(0, 32);
-    const serverEphemeralPk = msg2.slice(32, 64);
-    if (assertHmac(hmac, serverEphemeralPk, discriminator)) {
-        return serverEphemeralPk;
+    const difficulty = msg2.slice(32, 33);
+    const serverEphemeralPk = msg2.slice(33, 65);
+    if (assertHmac(hmac, Buffer.concat([difficulty, serverEphemeralPk]), discriminator)) {
+        return [difficulty, serverEphemeralPk];
     }
     throw "Non matching discriminators";
 }
 
 /**
- * Client creates message 3 (208 bytes).
+ * Client creates its second message (message 3: 212 bytes).
  * @return ciphertext: Buffer
  */
-function message3(detachedSigA: Buffer, discriminator: Buffer, clientLongtermPk: Buffer, sharedSecret_ab: Buffer, sharedSecret_aB: Buffer, clientData: Buffer | undefined): Buffer {
+function message3(detachedSigA: Buffer, nonce: Buffer, discriminator: Buffer, clientLongtermPk: Buffer, sharedSecret_ab: Buffer, sharedSecret_aB: Buffer, clientData: Buffer | undefined): Buffer {
     if (!clientData) {
         clientData = Buffer.alloc(96).fill(0);
     }
@@ -172,10 +196,10 @@ function message3(detachedSigA: Buffer, discriminator: Buffer, clientLongtermPk:
     if (clientData.length < 96) {
         clientData = Buffer.concat([clientData, Buffer.alloc(96 - clientData.length).fill(0)]);
     }
-    const message = Buffer.concat([detachedSigA, clientLongtermPk, clientData]);
-    const nonce = Buffer.alloc(24).fill(0);
+    const message = Buffer.concat([detachedSigA, nonce, clientLongtermPk, clientData]);
+    const boxNonce = Buffer.alloc(24).fill(0);
     const key = hashFn(Buffer.concat([discriminator, sharedSecret_ab, sharedSecret_aB]));
-    return Buffer.from(secretBox(message, nonce, key));
+    return Buffer.from(secretBox(message, boxNonce, key));
 }
 
 /**
@@ -185,25 +209,26 @@ function message3(detachedSigA: Buffer, discriminator: Buffer, clientLongtermPk:
  * @return [clientLongtermPk, detachedSigA, clientData]
  * @throws
  */
-function verifyMessage3(ciphertext: Buffer, serverLongtermPk: Buffer, discriminator: Buffer, sharedSecret_ab: Buffer, sharedSecret_aB: Buffer): [Buffer, Buffer, Buffer] {
-    const nonce = Buffer.alloc(24).fill(0);
+function verifyMessage3(ciphertext: Buffer, serverLongtermPk: Buffer, discriminator: Buffer, sharedSecret_ab: Buffer, sharedSecret_aB: Buffer): [Buffer, Buffer, Buffer, Buffer] {
+    const boxNonce = Buffer.alloc(24).fill(0);
     const key = hashFn(Buffer.concat([discriminator, sharedSecret_ab, sharedSecret_aB]));
-    const msg3 = secretBoxOpen(ciphertext, nonce, key);
+    const msg3 = secretBoxOpen(ciphertext, boxNonce, key);
 
-    if (msg3.length !== 64 + 32 + 96) {
+    if (msg3.length !== 4 + 64 + 32 + 96) {
         throw "Length mismatch decrypting message 3";
     }
 
     const detachedSigA = msg3.slice(0, 64);
-    const clientLongtermPk = msg3.slice(64, 64+32);
-    const clientData = msg3.slice(64+32);
-    const msg = Buffer.concat([discriminator, serverLongtermPk, hashFn(sharedSecret_ab)]);
+    const nonce = msg3.slice(64, 64+4);
+    const clientLongtermPk = msg3.slice(64+4, 64+4+32);
+    const clientData = msg3.slice(64+4+32);
+    const msg = Buffer.concat([nonce, discriminator, serverLongtermPk, hashFn(sharedSecret_ab)]);
 
     if (!signVerifyDetached(msg, detachedSigA, clientLongtermPk)) {
         throw "Signature does not match";
     }
 
-    return [clientLongtermPk, detachedSigA, clientData];
+    return [nonce, clientLongtermPk, detachedSigA, clientData];
 }
 
 /**
@@ -220,9 +245,9 @@ function message4(discriminator: Buffer, detachedSigA: Buffer, clientLongtermPk:
         serverData = Buffer.concat([serverData, Buffer.alloc(96 - serverData.length).fill(0)]);
     }
     const detachedSigB = signDetached(Buffer.concat([discriminator, detachedSigA, clientLongtermPk, hashFn(sharedSecret_ab)]), serverLongtermSk);
-    const nonce = Buffer.alloc(24).fill(0);
+    const boxNonce = Buffer.alloc(24).fill(0);
     const key = hashFn(Buffer.concat([discriminator, sharedSecret_ab, sharedSecret_aB, sharedSecret_Ab]));
-    return secretBox(Buffer.concat([detachedSigB, serverData]), nonce, key);
+    return secretBox(Buffer.concat([detachedSigB, serverData]), boxNonce, key);
 }
 
 /**
@@ -231,9 +256,9 @@ function message4(discriminator: Buffer, detachedSigA: Buffer, clientLongtermPk:
  * @throws on error
  */
 function verifyMessage4(ciphertext: Buffer, detachedSigA: Buffer, clientLongtermPk: Buffer, serverLongtermPk: Buffer, discriminator: Buffer, sharedSecret_ab: Buffer, sharedSecret_aB: Buffer, sharedSecret_Ab: Buffer): Buffer {
-    const nonce = Buffer.alloc(24).fill(0);
+    const boxNonce = Buffer.alloc(24).fill(0);
     const key = hashFn(Buffer.concat([discriminator, sharedSecret_ab, sharedSecret_aB, sharedSecret_Ab]));
-    const unboxed = secretBoxOpen(ciphertext, nonce, key);
+    const unboxed = secretBoxOpen(ciphertext, boxNonce, key);
     const detachedSigB = unboxed.slice(0, 64);
     const serverData = unboxed.slice(64, 64+96);
     const msg = Buffer.concat([discriminator, detachedSigA, clientLongtermPk, hashFn(sharedSecret_ab)]);
@@ -244,12 +269,36 @@ function verifyMessage4(ciphertext: Buffer, detachedSigA: Buffer, clientLongterm
 }
 
 /**
- * On successful handshake return the arbitrary server 96 byte data buffer.
+ * @param difficulty number of nibbles to solve for
+ */
+function CalculateNonce(difficulty: number, serverEphemeralPk: Buffer): Buffer {
+    const target = Buffer.from(serverEphemeralPk.toString("hex").slice(0, difficulty));
+    let n = 0;
+    let nonce = Buffer.alloc(4);
+    const b = Buffer.alloc(4);
+    while (!Equals(target, Buffer.from(nonce.toString("hex").slice(0, difficulty)))) {
+        n++;
+        b.writeUInt32BE(n);
+        nonce = hashFn(b).slice(0, 4);
+        if (n>=0xffffffff) {
+            throw "Nonce overflow";
+        }
+    }
+    return nonce;
+}
+
+function VerifyNonce(difficulty: number, serverEphemeralPk: Buffer, nonce: Buffer): boolean {
+    const target = Buffer.from(serverEphemeralPk.toString("hex").slice(0, difficulty));
+    return Equals(target, Buffer.from(nonce.toString("hex").slice(0, difficulty)));
+}
+
+/**
+ * On successful handshake return a populated HandshakeResult object.
  * On unsuccessful throw exception.
- * @return Promise <{clientToServerKey, clientNonce, serverToClientKey, serverNonce, serverData}>
+ * @return Promise <HandshakeResult>
  * @throws
  */
-export async function HandshakeAsClient(client: Client, clientLongtermSk: Buffer, clientLongtermPk: Buffer, serverLongtermPk: Buffer, discriminator: Buffer, clientData?: Function | Buffer): Promise<HandshakeResult> {
+export async function HandshakeAsClient(client: Client, clientLongtermSk: Buffer, clientLongtermPk: Buffer, serverLongtermPk: Buffer, discriminator: Buffer, clientData?: Buffer): Promise<HandshakeResult> {
     return new Promise( async (resolve, reject) => {
         try {
             await sodium.ready;
@@ -266,23 +315,19 @@ export async function HandshakeAsClient(client: Client, clientLongtermSk: Buffer
             client.send(msg1);
 
             // First response from server (message 2)
-            const msg2 = await new ByteSize(client).read(64);
-            const serverEphemeralPk = verifyMessage2(msg2, discriminator);
+            const msg2 = await new ByteSize(client).read(65);
+            const [difficulty, serverEphemeralPk] = verifyMessage2(msg2, discriminator);
+
+            const nonce = CalculateNonce(difficulty.readUInt8(0), serverEphemeralPk);
 
             const sharedSecret_ab = clientSharedSecret_ab(clientEphemeralSk, serverEphemeralPk);
             const sharedSecret_aB = clientSharedSecret_aB(clientEphemeralSk, serverLongtermPk);
 
+
             // Second message from client (message 3)
-            const detachedSigA = signDetached(Buffer.concat([discriminator, serverLongtermPk, hashFn(sharedSecret_ab)]), clientLongtermSk);
-            if (typeof(clientData) === "function") {
-                // Dynamically compute client data based on signature A.
-                // This provides a way for client to provide PoW to the server if the server requires that due to some ongoing DDoS.
-                clientData = clientData(detachedSigA);
-            }
-            if (!Buffer.isBuffer(clientData)) {
-                clientData = undefined;
-            }
-            const msg3_ciphertext = message3(detachedSigA, discriminator, clientLongtermPk, sharedSecret_ab, sharedSecret_aB, clientData);
+            const detachedSigA = signDetached(Buffer.concat([nonce, discriminator, serverLongtermPk, hashFn(sharedSecret_ab)]), clientLongtermSk);
+
+            const msg3_ciphertext = message3(detachedSigA, nonce, discriminator, clientLongtermPk, sharedSecret_ab, sharedSecret_aB, clientData);
             client.send(msg3_ciphertext);
 
             const sharedSecret_Ab = clientSharedSecret_Ab(clientLongtermSk, serverEphemeralPk);
@@ -304,11 +349,13 @@ export async function HandshakeAsClient(client: Client, clientLongtermSk: Buffer
 
 /**
  * On successful handshake return the client longterm public key the box keys and nonces and the arbitrary client 96 byte data buffer.
+ * On successful handshake return a populated HandshakeResult object.
  * On failed handshake throw exception.
- * @return Promise<{clientLongtermPk, clientToServerKey, clientNonce, serverToClientKey, serverNonce, clientData}>
+ * @param difficulty is the number of nibbles the client is required to calculate to mitigate ddos attacks. Difficulty 6 is a lot.
+ * @return Promise<HandshakeResult>
  * @throws
  */
-export async function HandshakeAsServer(client: Client, serverLongtermSk: Buffer, serverLongtermPk: Buffer, discriminator: Buffer, allowedClientKey?: Function | Buffer[], serverData?: Function | Buffer): Promise<HandshakeResult> {
+export async function HandshakeAsServer(client: Client, serverLongtermSk: Buffer, serverLongtermPk: Buffer, discriminator: Buffer, allowedClientKey?: Function | Buffer[], serverData?: Buffer, difficulty: number = 0): Promise<HandshakeResult> {
     return new Promise( async (resolve, reject) => {
         try {
             await sodium.ready;
@@ -321,28 +368,22 @@ export async function HandshakeAsServer(client: Client, serverLongtermSk: Buffer
             const serverEphemeralSk = serverEphemeralKeys.secretKey;
 
             // Wait for first message from client (message 1)
-            const msg1 = await new ByteSize(client).read(64);
+            const msg1 = await new ByteSize(client).read(65);
             const clientEphemeralPk = verifyMessage1(msg1, discriminator);
 
             // Send first message from server (message 2)
-            const msg2 = message2(serverEphemeralPk, discriminator);
+            const msg2 = message2(Buffer.from([difficulty]), serverEphemeralPk, discriminator);
             client.send(msg2);
 
             const sharedSecret_ab = serverSharedSecret_ab(serverEphemeralSk, clientEphemeralPk);
             const sharedSecret_aB = serverSharedSecret_aB(serverLongtermSk, clientEphemeralPk);
 
             // Wait for second message from client (message 3)
-            const msg3_ciphertext = await new ByteSize(client).read(208);
-            const [clientLongtermPk, detachedSigA, clientData] = verifyMessage3(msg3_ciphertext, serverLongtermPk, discriminator, sharedSecret_ab, sharedSecret_aB);
+            const msg3_ciphertext = await new ByteSize(client).read(212, 3000 + difficulty * 30000);
+            const [nonce, clientLongtermPk, detachedSigA, clientData] = verifyMessage3(msg3_ciphertext, serverLongtermPk, discriminator, sharedSecret_ab, sharedSecret_aB);
 
-            if (typeof(serverData) === "function") {
-                // The server can verify and/or check the client data.
-                // This could be something like a PoW check on the detachedSigA to prevent DDoS attacks.
-                // If it dislikes the clientData then it must throw an exception to abort this handshake.
-                serverData = await serverData(clientData, detachedSigA);
-            }
-            if (!Buffer.isBuffer(serverData)) {
-                serverData = undefined;
+            if (!VerifyNonce(difficulty, serverEphemeralPk, nonce)) {
+                throw "Nonce does not verify";
             }
 
             // Verify permissioned handshake for client longterm pk
