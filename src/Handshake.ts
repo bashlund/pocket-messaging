@@ -209,7 +209,7 @@ function verifyMessage2(msg2: Buffer, discriminator: Buffer): [Buffer, Buffer] {
 }
 
 /**
- * Client creates its second message (message 3: 212 bytes).
+ * Client creates its second message (message 3: variable length).
  * @return ciphertext: Buffer
  */
 function message3(detachedSigA: Buffer, nonce: Buffer, discriminator: Buffer, clientLongtermPk: Buffer, sharedSecret_ab: Buffer, sharedSecret_aB: Buffer, clientData: Buffer | undefined): Buffer {
@@ -238,31 +238,30 @@ function message3(detachedSigA: Buffer, nonce: Buffer, discriminator: Buffer, cl
     }
 
     if (!clientData) {
-        clientData = Buffer.alloc(96).fill(0);
+        clientData = Buffer.alloc(0);
     }
 
-    if (clientData.length > 96) {
-        throw "Client data cannot exceed 96 bytes";
-    }
-
-    if (clientData.length < 96) {
-        clientData = Buffer.concat([clientData, Buffer.alloc(96 - clientData.length).fill(0)]);
+    if (clientData.length > 1024*60) {
+        throw "Client data cannot exceed 60 KiB";
     }
 
     const message = Buffer.concat([detachedSigA, nonce, clientLongtermPk, clientData]);
     const boxNonce = Buffer.alloc(24).fill(0);
     const key = hashFn(Buffer.concat([discriminator, sharedSecret_ab, sharedSecret_aB]));
-    return Buffer.from(secretBox(message, boxNonce, key));
+    const ciphertext = Buffer.from(secretBox(message, boxNonce, key));
+    const length = Buffer.alloc(2);  // Prepend ciphertext with two bytes describing length
+    length.writeUInt16BE(ciphertext.length, 0);
+    return Buffer.concat([length, ciphertext]);
 }
 
 /**
  * Server verifies message 3.
- * Return client longterm public key, the detachedSigA, and the arbitrary client data on success.
+ * Return client longterm public key, the detachedSigA, and the arbitrary variable length client data on success.
  * Throws exception on error.
  * @return [clientLongtermPk, detachedSigA, clientData]
  * @throws
  */
-function verifyMessage3(ciphertext: Buffer, serverLongtermPk: Buffer, discriminator: Buffer, sharedSecret_ab: Buffer, sharedSecret_aB: Buffer): [Buffer, Buffer, Buffer, Buffer] {
+function verifyMessage3(msg3: Buffer, serverLongtermPk: Buffer, discriminator: Buffer, sharedSecret_ab: Buffer, sharedSecret_aB: Buffer): [Buffer, Buffer, Buffer, Buffer] {
     if (serverLongtermPk.length !== 32) {
         throw "serverLongtermPk must be of length 32 bytes";
     }
@@ -279,18 +278,19 @@ function verifyMessage3(ciphertext: Buffer, serverLongtermPk: Buffer, discrimina
         throw "sharedSecret_aB must be of length 32 bytes";
     }
 
-    const boxNonce = Buffer.alloc(24).fill(0);
-    const key = hashFn(Buffer.concat([discriminator, sharedSecret_ab, sharedSecret_aB]));
-    const msg3 = secretBoxOpen(ciphertext, boxNonce, key);
-
-    if (msg3.length !== 4 + 64 + 32 + 96) {
-        throw "Length mismatch decrypting message 3";
+    const length = msg3.readUInt16BE(0);
+    const ciphertext = msg3.slice(2);
+    if (ciphertext.length !== length) {
+        throw "Mismatching expected length of message 3";
     }
 
-    const detachedSigA = msg3.slice(0, 64);
-    const nonce = msg3.slice(64, 64+4);
-    const clientLongtermPk = msg3.slice(64+4, 64+4+32);
-    const clientData = msg3.slice(64+4+32);
+    const boxNonce = Buffer.alloc(24).fill(0);
+    const key = hashFn(Buffer.concat([discriminator, sharedSecret_ab, sharedSecret_aB]));
+    const unboxed = secretBoxOpen(ciphertext, boxNonce, key);
+    const detachedSigA = unboxed.slice(0, 64);
+    const nonce = unboxed.slice(64, 64+4);
+    const clientLongtermPk = unboxed.slice(64+4, 64+4+32);
+    const clientData = unboxed.slice(64+4+32);
     const msg = Buffer.concat([nonce, discriminator, serverLongtermPk, hashFn(sharedSecret_ab)]);
 
     if (!signVerifyDetached(msg, detachedSigA, clientLongtermPk)) {
@@ -333,21 +333,20 @@ function message4(discriminator: Buffer, detachedSigA: Buffer, clientLongtermPk:
     }
 
     if (!serverData) {
-        serverData = Buffer.alloc(96).fill(0);
+        serverData = Buffer.alloc(0);
     }
 
-    if (serverData.length > 96) {
-        throw "Client data cannot exceed 96 bytes";
-    }
-
-    if (serverData.length < 96) {
-        serverData = Buffer.concat([serverData, Buffer.alloc(96 - serverData.length).fill(0)]);
+    if (serverData.length > 1024*60) {
+        throw "Server data cannot exceed 60 KiB";
     }
 
     const detachedSigB = signDetached(Buffer.concat([discriminator, detachedSigA, clientLongtermPk, hashFn(sharedSecret_ab)]), serverLongtermSk);
     const boxNonce = Buffer.alloc(24).fill(0);
     const key = hashFn(Buffer.concat([discriminator, sharedSecret_ab, sharedSecret_aB, sharedSecret_Ab]));
-    return secretBox(Buffer.concat([detachedSigB, serverData]), boxNonce, key);
+    const ciphertext = secretBox(Buffer.concat([detachedSigB, serverData]), boxNonce, key);
+    const length = Buffer.alloc(2);  // Prepend ciphertext with two bytes describing length
+    length.writeUInt16BE(ciphertext.length, 0);
+    return Buffer.concat([length, ciphertext]);
 }
 
 /**
@@ -355,12 +354,47 @@ function message4(discriminator: Buffer, detachedSigA: Buffer, clientLongtermPk:
  * @return serverData: Buffer
  * @throws on error
  */
-function verifyMessage4(ciphertext: Buffer, detachedSigA: Buffer, clientLongtermPk: Buffer, serverLongtermPk: Buffer, discriminator: Buffer, sharedSecret_ab: Buffer, sharedSecret_aB: Buffer, sharedSecret_Ab: Buffer): Buffer {
+function verifyMessage4(msg4: Buffer, detachedSigA: Buffer, clientLongtermPk: Buffer, serverLongtermPk: Buffer, discriminator: Buffer, sharedSecret_ab: Buffer, sharedSecret_aB: Buffer, sharedSecret_Ab: Buffer): Buffer {
+    if (detachedSigA.length !== 64) {
+        throw "detachedSigA must be 64 bytes";
+    }
+
+    if (clientLongtermPk.length !== 32) {
+        throw "clientLongtermPk must be of length 32 bytes";
+    }
+
+    if (serverLongtermPk.length !== 32) {
+        throw "serverLongtermPk must be of length 32 bytes";
+    }
+
+    if (discriminator.length !== 32) {
+        throw "Discriminator must be 32 bytes";
+    }
+
+    if (sharedSecret_ab.length !== 32) {
+        throw "sharedSecret_ab must be of length 32 bytes";
+    }
+
+    if (sharedSecret_aB.length !== 32) {
+        throw "sharedSecret_aB must be of length 32 bytes";
+    }
+
+    if (sharedSecret_Ab.length !== 32) {
+        throw "sharedSecret_Ab must be of length 32 bytes";
+    }
+
+    const length = msg4.readUInt16BE(0);
+    const ciphertext = msg4.slice(2);
+    if (ciphertext.length !== length) {
+        throw "Mismatching expected length of message 4";
+    }
+
     const boxNonce = Buffer.alloc(24).fill(0);
     const key = hashFn(Buffer.concat([discriminator, sharedSecret_ab, sharedSecret_aB, sharedSecret_Ab]));
+
     const unboxed = secretBoxOpen(ciphertext, boxNonce, key);
     const detachedSigB = unboxed.slice(0, 64);
-    const serverData = unboxed.slice(64, 64+96);
+    const serverData = unboxed.slice(64);
     const msg = Buffer.concat([discriminator, detachedSigA, clientLongtermPk, hashFn(sharedSecret_ab)]);
     if (!signVerifyDetached(msg, detachedSigB, serverLongtermPk)) {
         throw "Signature does not match";
@@ -398,7 +432,7 @@ function VerifyNonce(difficulty: number, serverEphemeralPk: Buffer, nonce: Buffe
  * @return Promise <HandshakeResult>
  * @throws
  */
-export async function HandshakeAsClient(client: Client, clientLongtermSk: Buffer, clientLongtermPk: Buffer, serverLongtermPk: Buffer, discriminator: Buffer, clientData?: Buffer): Promise<HandshakeResult> {
+export async function HandshakeAsClient(client: Client, clientLongtermSk: Buffer, clientLongtermPk: Buffer, serverLongtermPk: Buffer, discriminator: Buffer, clientData?: Buffer, maxServerDataSize: number = 1024): Promise<HandshakeResult> {
     return new Promise( async (resolve, reject) => {
         try {
             await sodium.ready;
@@ -426,14 +460,22 @@ export async function HandshakeAsClient(client: Client, clientLongtermSk: Buffer
             // Second message from client (message 3)
             const detachedSigA = signDetached(Buffer.concat([nonce, discriminator, serverLongtermPk, hashFn(sharedSecret_ab)]), clientLongtermSk);
 
-            const msg3_ciphertext = message3(detachedSigA, nonce, discriminator, clientLongtermPk, sharedSecret_ab, sharedSecret_aB, clientData);
-            client.send(msg3_ciphertext);
+            const msg3 = message3(detachedSigA, nonce, discriminator, clientLongtermPk, sharedSecret_ab, sharedSecret_aB, clientData);
+            client.send(msg3);
 
             const sharedSecret_Ab = clientSharedSecret_Ab(clientLongtermSk, serverEphemeralPk);
 
-            // Second response from server (message 4)
-            const msg4_ciphertext = await new ByteSize(client).read(176);
-            const serverData = verifyMessage4(msg4_ciphertext, detachedSigA, clientLongtermPk, serverLongtermPk, discriminator, sharedSecret_ab, sharedSecret_aB, sharedSecret_Ab);
+            // Wait for second response from server (message 4)
+            const lengthPrefix = await new ByteSize(client).read(2);
+            const length = lengthPrefix.readUInt16BE(0);
+            if (length - 64 > maxServerDataSize) {
+                throw "Server data length too big";
+            }
+            const msg4_ciphertext = await new ByteSize(client).read(length);
+            const msg4 = Buffer.concat([lengthPrefix, msg4_ciphertext]);
+
+            //const msg4_ciphertext = await new ByteSize(client).read(176);
+            const serverData = verifyMessage4(msg4, detachedSigA, clientLongtermPk, serverLongtermPk, discriminator, sharedSecret_ab, sharedSecret_aB, sharedSecret_Ab);
 
             const [clientToServerKey, clientNonce] = calcClientToServerKey(discriminator, sharedSecret_ab, sharedSecret_aB, sharedSecret_Ab, serverLongtermPk, serverEphemeralPk);
             const [serverToClientKey, serverNonce] = calcServerToClientKey(discriminator, sharedSecret_ab, sharedSecret_aB, sharedSecret_Ab, clientLongtermPk, clientEphemeralPk);
@@ -466,7 +508,7 @@ export async function HandshakeAsClient(client: Client, clientLongtermSk: Buffer
  * @return Promise<HandshakeResult>
  * @throws
  */
-export async function HandshakeAsServer(client: Client, serverLongtermSk: Buffer, serverLongtermPk: Buffer, discriminator: Buffer, allowedClientKey?: Function | Buffer[], serverData?: Buffer, difficulty: number = 0): Promise<HandshakeResult> {
+export async function HandshakeAsServer(client: Client, serverLongtermSk: Buffer, serverLongtermPk: Buffer, discriminator: Buffer, allowedClientKey?: Function | Buffer[], serverData?: Buffer, difficulty: number = 0, maxClientDataSize: number = 1024): Promise<HandshakeResult> {
     return new Promise( async (resolve, reject) => {
         try {
             if (difficulty > 8) {
@@ -495,8 +537,16 @@ export async function HandshakeAsServer(client: Client, serverLongtermSk: Buffer
             const sharedSecret_aB = serverSharedSecret_aB(serverLongtermSk, clientEphemeralPk);
 
             // Wait for second message from client (message 3)
-            const msg3_ciphertext = await new ByteSize(client).read(212, 3000 + difficulty * 30000);
-            const [nonce, clientLongtermPk, detachedSigA, clientData] = verifyMessage3(msg3_ciphertext, serverLongtermPk, discriminator, sharedSecret_ab, sharedSecret_aB);
+            const lengthPrefix = await new ByteSize(client).read(2, 3000 + difficulty * 30000);
+            const length = lengthPrefix.readUInt16BE(0);
+            if (length - 100 > maxClientDataSize) {
+                throw "Client data length too big";
+            }
+
+            const msg3_ciphertext = await new ByteSize(client).read(length);
+            const msg3 = Buffer.concat([lengthPrefix, msg3_ciphertext]);
+
+            const [nonce, clientLongtermPk, detachedSigA, clientData] = verifyMessage3(msg3, serverLongtermPk, discriminator, sharedSecret_ab, sharedSecret_aB);
 
             if (!VerifyNonce(difficulty, serverEphemeralPk, nonce)) {
                 throw "Nonce does not verify";
@@ -526,8 +576,8 @@ export async function HandshakeAsServer(client: Client, serverLongtermSk: Buffer
             const sharedSecret_Ab = serverSharedSecret_Ab(serverEphemeralSk, clientLongtermPk);
 
             // Send second message from server (message 4)
-            const msg4_ciphertext = message4(discriminator, detachedSigA, clientLongtermPk, sharedSecret_ab, sharedSecret_aB, sharedSecret_Ab, serverLongtermSk, serverData);
-            client.send(msg4_ciphertext);
+            const msg4 = message4(discriminator, detachedSigA, clientLongtermPk, sharedSecret_ab, sharedSecret_aB, sharedSecret_Ab, serverLongtermSk, serverData);
+            client.send(msg4);
 
             const [clientToServerKey, clientNonce] = calcClientToServerKey(discriminator, sharedSecret_ab, sharedSecret_aB, sharedSecret_Ab, serverLongtermPk, serverEphemeralPk);
             const [serverToClientKey, serverNonce] = calcServerToClientKey(discriminator, sharedSecret_ab, sharedSecret_aB, sharedSecret_Ab, clientLongtermPk, clientEphemeralPk);
