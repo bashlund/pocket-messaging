@@ -483,6 +483,7 @@ export async function HandshakeAsClient(client: Client, clientLongtermSk: Buffer
             const sessionId = hashFn(sharedSecret_ab);
 
             const handshakeParams = {
+                longtermPk: clientLongtermPk,
                 peerLongtermPk: serverLongtermPk,
                 clientToServerKey,
                 clientNonce,
@@ -584,6 +585,7 @@ export async function HandshakeAsServer(client: Client, serverLongtermSk: Buffer
             const sessionId = hashFn(sharedSecret_ab);
 
             const handshakeParams = {
+                longtermPk: serverLongtermPk,
                 peerLongtermPk: clientLongtermPk,
                 clientToServerKey,
                 clientNonce,

@@ -144,6 +144,7 @@ export enum EventType {
 }
 
 export type HandshakeResult = {
+    longtermPk: Buffer,         // The public which was used to handshake.
     peerLongtermPk: Buffer,     // The handshaked longterm public key of the peer
     clientToServerKey: Buffer,  // box key
     clientNonce: Buffer,        // box nonce
