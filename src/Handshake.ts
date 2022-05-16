@@ -5,7 +5,7 @@
  */
 
 import sodium from "libsodium-wrappers";
-import {Client, ByteSize} from "../../pocket-sockets";
+import {Client, ByteSize} from "pocket-sockets";
 
 import {
     HandshakeResult,

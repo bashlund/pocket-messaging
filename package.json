@@ -1,7 +1,7 @@
 {
   "name": "pocket-messaging",
-  "version": "0.9.0",
-  "description": "A small messaging library for browser and nodejs supporting TCP and WebSockets with optional encryption (TLS)",
+  "version": "1.0.0",
+  "description": "A small cryptographic messaging library written in TypeScript both for browser and nodejs supporting TCP and WebSockets",
   "keywords": [
     "messaging",
     "message",
@@ -35,16 +35,17 @@
   },
   "dependencies": {
     "eventemitter3": "^4.0.7",
-    "libsodium-wrappers": "^0.7.9"
+    "libsodium-wrappers": "^0.7.9",
+    "pocket-sockets": "1.1.0"
   },
   "devDependencies": {
     "@tsconfig/node12": "^1.0.7",
+    "@types/libsodium-wrappers": "^0.7.9",
     "@types/node": "^14.17.11",
     "testyts": "^1.5.0",
     "ts-node": "^10.2.1",
-    "typedoc": "^0.22.3",
+    "typedoc": "^0.22.15",
     "typedoc-plugin-markdown": "^3.11.0",
-    "typescript": "^4.3.5",
-    "@types/libsodium-wrappers": "^0.7.9"
+    "typescript": "^4.3.5"
   }
 }

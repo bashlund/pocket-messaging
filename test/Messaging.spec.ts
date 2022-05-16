@@ -3,7 +3,7 @@ import { TestSuite, Test, AfterAll, expect } from 'testyts';
 import EventEmitter from "eventemitter3";
 
 import {Messaging, once, Header, EventType, SentMessage, TimeoutEvent} from "../";
-import {CreatePair, Client} from "../../pocket-sockets";
+import {CreatePair, Client} from "pocket-sockets";
 
 const assert = require("assert");
 

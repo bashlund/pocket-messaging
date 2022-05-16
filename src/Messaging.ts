@@ -1,4 +1,4 @@
-import {Client} from "../../pocket-sockets";
+import {Client} from "pocket-sockets";
 import EventEmitter from "eventemitter3";
 import {box, unbox, init} from "./Crypto";
 import crypto from "crypto";  // Only used for synchronous randomBytes.

@@ -1,7 +1,7 @@
 import { TestSuite, Test, AfterAll, BeforeAll, expect } from 'testyts';
 
 import {genKeyPair, init} from "../src/Crypto";
-import {CreatePair, Client} from "../../pocket-sockets";
+import {CreatePair, Client} from "pocket-sockets";
 import {HandshakeAsClient, HandshakeAsServer} from "../src/Handshake";
 const assert = require("assert");
 

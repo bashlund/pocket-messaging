@@ -1,6 +1,6 @@
 # pocket-messaging
 
-A small, eventdriven messaging library written in TypeScript for client/server communication over TCP or WebSockets with support for TLS encryption.
+A small, eventdriven cryptographic messaging library written in TypeScript for client/server communication over TCP or WebSockets with support for TLS encryption.
 
 Runs in browser and NodeJS.
 
@@ -42,6 +42,8 @@ For a complete example, please refer to the [./example](https://github.com/bashl
 ## Reference
 Code documentation and API references are available in the official [Wiki](https://github.com/bashlund/pocket-messaging/wiki): [https://github.com/bashlund/pocket-messaging/wiki](https://github.com/bashlund/pocket-messaging/wiki).
 
+## Credits
+Lib written by @bashlund, tests and wiki nicely crafted by @filippsen.
 
 ## License
 This project is released under the _MIT_ license.
