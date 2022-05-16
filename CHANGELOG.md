@@ -1,5 +1,8 @@
 # CHANGELOG: pocket-messaging
 
+## [1.0.2] - 20220516
+Add project and compiler options.  
+
 ## [1.0.1] - 20220516
 Update pocket-sockets version.  
 
