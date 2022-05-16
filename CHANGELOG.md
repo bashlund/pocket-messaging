@@ -1,5 +1,8 @@
 # CHANGELOG: pocket-messaging
 
+## [1.0.1] - 20220516
+Update pocket-sockets version.  
+
 ## [1.0.0] - 20220516
 Switch to using pocket-sockets on npm instead of local disk.  
 Update dependency version.  
