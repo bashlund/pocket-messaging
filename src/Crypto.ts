@@ -34,7 +34,7 @@ export function box(message: Buffer, nonce: Buffer, key: Buffer): [Buffer, Buffe
     const encryptedBody = sodium.crypto_secretbox_easy(message, nonce, key);
     const headerNonce = increaseNonce(nonce);
 
-    const bodyAuthTag = encryptedBody.slice(0, 16);
+    const bodyAuthTag = Buffer.from(encryptedBody.slice(0, 16));
     const bodyLength = Buffer.alloc(2);
     bodyLength.writeUInt16BE(message.length, 0);
 
@@ -42,7 +42,7 @@ export function box(message: Buffer, nonce: Buffer, key: Buffer): [Buffer, Buffe
     const encryptedHeader = sodium.crypto_secretbox_easy(header, headerNonce, key);  // 34 bytes
     const nextNonce = increaseNonce(headerNonce);
 
-    const ciphertext = Buffer.concat([encryptedHeader, encryptedBody.slice(16)]);
+    const ciphertext = Buffer.concat([Buffer.from(encryptedHeader), Buffer.from(encryptedBody.slice(16))]);
     return [ciphertext, nextNonce];
 }
 
