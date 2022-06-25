@@ -14,6 +14,8 @@ export class CryptoSpec {
         const outgoingKey = Buffer.alloc(32).fill(2);
         const [ciphertext, nextNonce] = box(chunk, outgoingNonce, outgoingKey);
         expect.toBeFalse(ciphertext.equals(chunk));
+        expect.toBeTrue(typeof(ciphertext) == "object");
+        expect.toBeTrue(Buffer.isBuffer(ciphertext) == true);
 
         const incomingNonce = Buffer.alloc(24).fill(1);
         const incomingKey = outgoingKey;
