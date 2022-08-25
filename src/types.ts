@@ -1,5 +1,9 @@
 import EventEmitter from "eventemitter3";
 
+import {
+    SocketFactoryConfig,
+} from "pocket-sockets";
+
 /**
  * A single message cannot exceed 65535 bytes in total.
  */
@@ -144,7 +148,7 @@ export enum EventType {
 }
 
 export type HandshakeResult = {
-    longtermPk: Buffer,         // The public which was used to handshake.
+    longtermPk: Buffer,         // The public key which was used to handshake
     peerLongtermPk: Buffer,     // The handshaked longterm public key of the peer
     clientToServerKey: Buffer,  // box key
     clientNonce: Buffer,        // box nonce
@@ -152,4 +156,33 @@ export type HandshakeResult = {
     serverNonce: Buffer,        // box nonce
     peerData: Buffer,           // arbitrary data provided by peer
     sessionId: Buffer,          // A mutual 32 byte session ID which can be used. Same for client and server. Derived by the hashing of a shared secret.
+};
+
+export type KeyPair = {
+    publicKey: Buffer,
+    secretKey: Buffer,
+};
+
+export type ClientValidatorFunctionInterface = (clientLongTermPk: Buffer) => boolean;
+
+export type HandshakeFactoryConfig = {
+    socketFactoryConfig: SocketFactoryConfig,
+
+    /** The keypair to use in the cryptographic handshake. */
+    keyPair: KeyPair,
+
+    /** The discriminator which must match the peer's discriminator when handshaking. */
+    discriminator: Buffer,
+
+    /** Arbitrary data sent to the other peer. */
+    peerData?: Buffer,
+
+    /** If connecting as client the public key of the server must be set. */
+    serverPublicKey?: Buffer,
+
+    /** If opening a server we can discriminate on peers public keys in the handshake. */
+    allowedClients?: Buffer[] | ClientValidatorFunctionInterface;
+
+    /** If set, the maximum no of connections each cryptographically handshaked publicKey is allowed. */
+    maxConnectionsPerClient?: number,
 };
