@@ -165,6 +165,8 @@ export type KeyPair = {
 
 export type ClientValidatorFunctionInterface = (clientLongTermPk: Buffer) => boolean;
 
+export type PeerDataGeneratorFunctionInterface = (isServer: boolean) => Buffer;
+
 export type HandshakeFactoryConfig = {
     socketFactoryConfig: SocketFactoryConfig,
 
@@ -174,13 +176,21 @@ export type HandshakeFactoryConfig = {
     /** The discriminator which must match the peer's discriminator when handshaking. */
     discriminator: Buffer,
 
-    /** Arbitrary data sent to the other peer. */
-    peerData?: Buffer,
+    /**
+     * Arbitrary data sent to the other peer.
+     * If a function then call it to get the peerData buffer.
+     */
+    peerData?: Buffer | PeerDataGeneratorFunctionInterface,
 
     /** If connecting as client the public key of the server must be set. */
     serverPublicKey?: Buffer,
 
-    /** If opening a server we can discriminate on peers public keys in the handshake. */
+    /**
+     * If opening a server we can discriminate on peers public keys in the handshake.
+     * If set as array the client public key must be in the array to accept to client.
+     * If set as function the function must return boolean true to accept the client.
+     * If not set (undefined) then all clients are accepted.
+     * */
     allowedClients?: Buffer[] | ClientValidatorFunctionInterface;
 
     /** If set, the maximum no of connections each cryptographically handshaked publicKey is allowed. */

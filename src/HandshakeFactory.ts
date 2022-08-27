@@ -51,8 +51,15 @@ export class HandshakeFactory extends SocketFactory {
         try {
             const messaging = new Messaging(e.client);
             let handshakeResult: HandshakeResult;
+            let peerData: Buffer | undefined;
+            if (typeof this.handshakeFactoryConfig.peerData === "function") {
+                peerData = this.handshakeFactoryConfig.peerData(e.isServer);
+            }
+            else {
+                peerData = this.handshakeFactoryConfig.peerData;
+            }
             if (e.isServer) {
-                handshakeResult = await HandshakeAsServer(e.client, this.handshakeFactoryConfig.keyPair.secretKey, this.handshakeFactoryConfig.keyPair.publicKey, this.handshakeFactoryConfig.discriminator, this.handshakeFactoryConfig.allowedClients, this.handshakeFactoryConfig.peerData);
+                handshakeResult = await HandshakeAsServer(e.client, this.handshakeFactoryConfig.keyPair.secretKey, this.handshakeFactoryConfig.keyPair.publicKey, this.handshakeFactoryConfig.discriminator, this.handshakeFactoryConfig.allowedClients, peerData);
                 await messaging.setEncrypted(handshakeResult.serverToClientKey, handshakeResult.serverNonce, handshakeResult.clientToServerKey, handshakeResult.clientNonce, handshakeResult.peerLongtermPk);
             }
             else {
@@ -60,7 +67,7 @@ export class HandshakeFactory extends SocketFactory {
                     e.client.close();
                     return;
                 }
-                handshakeResult = await HandshakeAsClient(e.client, this.handshakeFactoryConfig.keyPair.secretKey, this.handshakeFactoryConfig.keyPair.publicKey, this.handshakeFactoryConfig.serverPublicKey, this.handshakeFactoryConfig.discriminator, this.handshakeFactoryConfig.peerData);
+                handshakeResult = await HandshakeAsClient(e.client, this.handshakeFactoryConfig.keyPair.secretKey, this.handshakeFactoryConfig.keyPair.publicKey, this.handshakeFactoryConfig.serverPublicKey, this.handshakeFactoryConfig.discriminator, peerData);
                 await messaging.setEncrypted(handshakeResult.clientToServerKey, handshakeResult.clientNonce, handshakeResult.serverToClientKey, handshakeResult.serverNonce, handshakeResult.peerLongtermPk);
             }
             if (!handshakeResult) {
