@@ -5,6 +5,8 @@ import {
     ClientRefuseCallback,
 } from "pocket-sockets";
 
+import {EVENTS as SOCKETFACTORY_EVENTS} from "pocket-sockets";
+
 import {
     HandshakeFactoryConfig,
     HandshakeResult,
@@ -20,26 +22,45 @@ import {
 } from "./Handshake";
 
 /**
+ * Extend EVENTS from SocketFactory.
+ * Add event HANDSHAKE_ERROR with the callback signature HandshakeErrorCallback.
+ * Add "HANDSHAKE_ERROR" to ERROR.subEvents.
+ */
+export const EVENTS = {
+    ...SOCKETFACTORY_EVENTS,
+    ERROR: {
+        ...SOCKETFACTORY_EVENTS.ERROR,
+        subEvents: [...SOCKETFACTORY_EVENTS.ERROR.subEvents, "HANDSHAKE_ERROR"],
+    },
+    HANDSHAKE: {
+        name: "HANDSHAKE",
+    },
+    HANDSHAKE_ERROR: {
+        name: "HANDSHAKE_ERROR",
+    },
+    CLIENT_REFUSE: {
+        ...SOCKETFACTORY_EVENTS.CLIENT_REFUSE,
+        reason: {
+            ...SOCKETFACTORY_EVENTS.CLIENT_REFUSE.reason,
+            PUBLICKEY_OVERFLOW: "PUBLICKEY_OVERFLOW",
+        }
+    },
+};
+
+/**
  * Event emitted when client is successfully handshaked and setup for encryption.
  * Note that the returned Messaging object first needs to be .open()'d to be ready for communication.
  */
 export type HandshakeCallback = (e: {messaging: Messaging, isServer: boolean, handshakeResult: HandshakeResult}) => void;
 
 /** Event emitted when client could not handshake. */
-export type HandshakeErrorCallback = (e: {client: Client, error: Error}) => void;
-
+export type HandshakeErrorCallback = (e: {error: Error, client: Client}) => void;
 
 /**
  * This class extends the SocketFactory with handshake capabilties.
- *
- * The general SocketFactory EVENT_ERROR is also emitted for EVENT_HANDSHAKE_ERROR and the data property is set to the Client object.
- * The SocketFactory EVENT_CLIENT_REFUSE is extended with a type of HandshakeFactory.EVENT_CLIENT_REFUSE_PUBLICKEY_OVERFLOW.
+ * The SocketFactory EVENTS objects is redeclared here and extended.
  */
 export class HandshakeFactory extends SocketFactory {
-    public static readonly EVENT_HANDSHAKE          = "handshake";
-    public static readonly EVENT_HANDSHAKE_ERROR    = "handshakeError";
-    public static readonly EVENT_CLIENT_REFUSE_PUBLICKEY_OVERFLOW = "publicKey-overflow";
-
     protected handshakeFactoryConfig: HandshakeFactoryConfig;
 
     constructor(handshakeFactoryConfig: HandshakeFactoryConfig) {
@@ -77,7 +98,8 @@ export class HandshakeFactory extends SocketFactory {
             const publicKeyStr = handshakeResult.peerLongtermPk.toString("hex");
             if (this.checkClientsOverflow(publicKeyStr)) {
                 messaging.close();
-                this.triggerEvent(HandshakeFactory.EVENT_CLIENT_REFUSE, {type: HandshakeFactory.EVENT_CLIENT_REFUSE_PUBLICKEY_OVERFLOW, key: handshakeResult.peerLongtermPk});
+                this.triggerEvent(EVENTS.CLIENT_REFUSE.name,
+                                  {reason: EVENTS.CLIENT_REFUSE.reason.PUBLICKEY_OVERFLOW, key: handshakeResult.peerLongtermPk});
                 return;
             }
             this.increaseClientsCounter(publicKeyStr);
@@ -85,14 +107,14 @@ export class HandshakeFactory extends SocketFactory {
                 this.decreaseClientsCounter(publicKeyStr);
             });
 
-            this.triggerEvent(HandshakeFactory.EVENT_HANDSHAKE, {messaging, isServer: e.isServer, handshakeResult});
+            this.triggerEvent(EVENTS.HANDSHAKE.name, {messaging, isServer: e.isServer, handshakeResult});
         }
         catch(error) {
             if (typeof error === "string") {
                 error = new Error(error);
             }
-            this.triggerEvent(HandshakeFactory.EVENT_HANDSHAKE_ERROR, {client: e.client, error});
-            this.triggerEvent(HandshakeFactory.EVENT_ERROR, {type: HandshakeFactory.EVENT_HANDSHAKE_ERROR, error, data: e.client});
+            this.triggerEvent(EVENTS.HANDSHAKE_ERROR.name, {error, client: e.client});
+            this.triggerEvent(EVENTS.ERROR.name, {eventName: EVENTS.HANDSHAKE_ERROR, e: {error, client: e.client}});
             e.client.close();
         }
     }
@@ -132,10 +154,10 @@ export class HandshakeFactory extends SocketFactory {
     }
 
     onHandshakeError(callback: HandshakeErrorCallback) {
-        this.hookEvent(HandshakeFactory.EVENT_HANDSHAKE_ERROR, callback);
+        this.hookEvent(EVENTS.HANDSHAKE_ERROR.name, callback);
     }
 
     onHandshake(callback: HandshakeCallback) {
-        this.hookEvent(HandshakeFactory.EVENT_HANDSHAKE, callback);
+        this.hookEvent(EVENTS.HANDSHAKE.name, callback);
     }
 }

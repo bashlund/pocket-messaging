@@ -471,10 +471,10 @@ export async function HandshakeAsClient(client: Client, clientLongtermSk: Buffer
             if (length - 64 > maxServerDataSize) {
                 throw "Server data length too big";
             }
+
             const msg4_ciphertext = await new ByteSize(client).read(length);
             const msg4 = Buffer.concat([lengthPrefix, msg4_ciphertext]);
 
-            //const msg4_ciphertext = await new ByteSize(client).read(176);
             const serverData = verifyMessage4(msg4, detachedSigA, clientLongtermPk, serverLongtermPk, discriminator, sharedSecret_ab, sharedSecret_aB, sharedSecret_Ab);
 
             const [clientToServerKey, clientNonce] = calcClientToServerKey(discriminator, sharedSecret_ab, sharedSecret_aB, sharedSecret_Ab, serverLongtermPk, serverEphemeralPk);
