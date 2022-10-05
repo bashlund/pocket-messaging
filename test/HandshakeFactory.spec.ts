@@ -21,9 +21,9 @@ export class HandshakeFactoryConstructor {
             });
 
             //@ts-ignore
-            assert(Object.keys(handshakeFactory.handshakeFactoryConfig.socketFactoryConfig).length == 1);
+            assert(Object.keys(handshakeFactory.getHandshakeFactoryConfig().socketFactoryConfig).length == 1);
             //@ts-ignore
-            assert(handshakeFactory.handshakeFactoryConfig.socketFactoryConfig.maxConnections == 9);
+            assert(handshakeFactory.getHandshakeFactoryConfig().socketFactoryConfig.maxConnections == 9);
             //@ts-ignore
             assert(Object.keys(handshakeFactory.stats.counters).length == 0);
             //@ts-ignore
@@ -74,7 +74,7 @@ export class HandshakeFactoryHandleOnConnect {
             });
 
             //@ts-ignore
-            const clientSocket = new TCPClient(handshakeFactory.handshakeFactoryConfig.socketFactoryConfig.client.clientOptions);
+            const clientSocket = new TCPClient(handshakeFactory.getHandshakeFactoryConfig().socketFactoryConfig.client.clientOptions);
 
             //@ts-ignore
             const callback = await handshakeFactory.handleOnConnect({
@@ -118,7 +118,7 @@ export class HandshakeFactoryHandleOnConnect {
             });
 
             //@ts-ignore
-            const clientSocket = new TCPClient(handshakeFactory.handshakeFactoryConfig.socketFactoryConfig.client.clientOptions);
+            const clientSocket = new TCPClient(handshakeFactory.getHandshakeFactoryConfig().socketFactoryConfig.client.clientOptions);
 
             //@ts-ignore
             const callback = await handshakeFactory.handleOnConnect({
@@ -161,7 +161,7 @@ export class HandshakeFactoryHandleOnConnect {
             });
 
             //@ts-ignore
-            const clientSocket = new TCPClient(handshakeFactory.handshakeFactoryConfig.socketFactoryConfig.client.clientOptions);
+            const clientSocket = new TCPClient(handshakeFactory.getHandshakeFactoryConfig().socketFactoryConfig.client.clientOptions);
 
             let clientSocketCloseCalled = false;
             //@ts-ignore
@@ -214,7 +214,7 @@ export class HandshakeFactoryHandleOnConnect {
             });
 
             //@ts-ignore
-            const clientSocket = new TCPClient(handshakeFactory.handshakeFactoryConfig.socketFactoryConfig.client.clientOptions);
+            const clientSocket = new TCPClient(handshakeFactory.getHandshakeFactoryConfig().socketFactoryConfig.client.clientOptions);
 
             //@ts-ignore
             handshakeFactory.triggerEvent = function(name, args) {
@@ -231,6 +231,349 @@ export class HandshakeFactoryHandleOnConnect {
                 client: clientSocket,
                 isServer: false
             });
+        });
+    }
+}
+
+@TestSuite()
+export class HandshakeFactoryInit {
+    @Test()
+    public successful_call() {
+        assert.doesNotThrow(async () => {
+            let handshakeFactory = new HandshakeFactory({
+                socketFactoryConfig: {
+                    client: {
+                        socketType: "TCP",
+                        clientOptions: {
+                            "host": "host.com",
+                            "port": 99
+                        },
+                        reconnectDelay: 0,
+                    },
+
+                    server: {
+                        socketType: "WebSocket",
+                        serverOptions: {
+                            "host": "host.com",
+                            "port": 99
+                        },
+                        deniedIPs: ["192.168.5.5"],
+                        allowedIPs: ["127.0.0.1", "localhost"],
+                    },
+                    maxConnections: 0
+                },
+                keyPair: {
+                    publicKey: Buffer.alloc(0),
+                    secretKey: Buffer.alloc(0)
+                },
+                discriminator: Buffer.alloc(0),
+                serverPublicKey: Buffer.alloc(0),
+            });
+
+            const handleOnConnectFn = function(){
+            };
+            //@ts-ignore
+            handshakeFactory.handleOnConnect = handleOnConnectFn;
+
+            handshakeFactory.onConnect = function(fn){
+                onConnectCalled = true;
+                assert(fn == handleOnConnectFn);
+            };
+
+            let onConnectCalled = false;
+            handshakeFactory.onConnect = function(){
+                onConnectCalled = true;
+            };
+            //@ts-ignore
+            handshakeFactory.init();
+
+            //@ts-ignore
+            assert(onConnectCalled == true);
+        });
+    }
+}
+
+@TestSuite()
+export class HandshakeFactoryIncreaseDecreaseClientsCounter {
+    @Test()
+    public successful_call() {
+        assert.doesNotThrow(async () => {
+            let handshakeFactory = new HandshakeFactory({
+                socketFactoryConfig: {
+                    client: {
+                        socketType: "TCP",
+                        clientOptions: {
+                            "host": "host.com",
+                            "port": 99
+                        },
+                        reconnectDelay: 0,
+                    },
+
+                    server: {
+                        socketType: "WebSocket",
+                        serverOptions: {
+                            "host": "host.com",
+                            "port": 99
+                        },
+                        deniedIPs: ["192.168.5.5"],
+                        allowedIPs: ["127.0.0.1", "localhost"],
+                    },
+                    maxConnections: 0
+                },
+                keyPair: {
+                    publicKey: Buffer.alloc(0),
+                    secretKey: Buffer.alloc(0)
+                },
+                discriminator: Buffer.alloc(0),
+                serverPublicKey: Buffer.alloc(0),
+            });
+
+            //@ts-ignore
+            let counter = handshakeFactory.readCounter("ABBA");
+            assert(counter == 0);
+
+            //@ts-ignore
+            handshakeFactory.increaseCounter("ABBA");
+
+            //@ts-ignore
+            counter = handshakeFactory.readCounter("ABBA");
+            assert(counter == 1);
+
+            //@ts-ignore
+            handshakeFactory.increaseCounter("ABBA");
+            //@ts-ignore
+            counter = handshakeFactory.readCounter("ABBA");
+            assert(counter == 2);
+
+            //@ts-ignore
+            handshakeFactory.decreaseCounter("ABBA");
+            //@ts-ignore
+            counter = handshakeFactory.readCounter("ABBA");
+            assert(counter == 1);
+        });
+    }
+}
+
+@TestSuite()
+export class HandshakeFactoryCheckClientsOverflow {
+    @Test()
+    public configuration_undefined() {
+        assert.doesNotThrow(async () => {
+            let handshakeFactory = new HandshakeFactory({
+                socketFactoryConfig: {
+                    client: {
+                        socketType: "TCP",
+                        clientOptions: {
+                            "host": "host.com",
+                            "port": 99
+                        },
+                        reconnectDelay: 0,
+                    },
+
+                    server: {
+                        socketType: "WebSocket",
+                        serverOptions: {
+                            "host": "host.com",
+                            "port": 99
+                        },
+                        deniedIPs: ["192.168.5.5"],
+                        allowedIPs: ["127.0.0.1", "localhost"],
+                    },
+                    maxConnections: 0
+                },
+                keyPair: {
+                    publicKey: Buffer.alloc(0),
+                    secretKey: Buffer.alloc(0)
+                },
+                discriminator: Buffer.alloc(0),
+                serverPublicKey: Buffer.alloc(0),
+            });
+
+            //@ts-ignore
+            let overflows = handshakeFactory.checkClientsOverflow("ABBA");
+            assert(overflows == false);
+        });
+    }
+
+    @Test()
+    public overflows() {
+        assert.doesNotThrow(async () => {
+            let handshakeFactory = new HandshakeFactory({
+                socketFactoryConfig: {
+                    client: {
+                        socketType: "TCP",
+                        clientOptions: {
+                            "host": "host.com",
+                            "port": 99
+                        },
+                        reconnectDelay: 0,
+                    },
+
+                    server: {
+                        socketType: "WebSocket",
+                        serverOptions: {
+                            "host": "host.com",
+                            "port": 99
+                        },
+                        deniedIPs: ["192.168.5.5"],
+                        allowedIPs: ["127.0.0.1", "localhost"],
+                    },
+                    maxConnections: 1
+                },
+                keyPair: {
+                    publicKey: Buffer.alloc(0),
+                    secretKey: Buffer.alloc(0)
+                },
+                discriminator: Buffer.alloc(0),
+                serverPublicKey: Buffer.alloc(0),
+                maxConnectionsPerClient: 1
+            });
+
+            //@ts-ignore
+            handshakeFactory.increaseCounter("ABBA");
+
+            //@ts-ignore
+            let overflows = handshakeFactory.checkClientsOverflow("ABBA");
+            assert(overflows == true);
+        });
+    }
+
+    @Test()
+    public within_range() {
+        assert.doesNotThrow(async () => {
+            let handshakeFactory = new HandshakeFactory({
+                socketFactoryConfig: {
+                    client: {
+                        socketType: "TCP",
+                        clientOptions: {
+                            "host": "host.com",
+                            "port": 99
+                        },
+                        reconnectDelay: 0,
+                    },
+
+                    server: {
+                        socketType: "WebSocket",
+                        serverOptions: {
+                            "host": "host.com",
+                            "port": 99
+                        },
+                        deniedIPs: ["192.168.5.5"],
+                        allowedIPs: ["127.0.0.1", "localhost"],
+                    },
+                    maxConnections: 1
+                },
+                keyPair: {
+                    publicKey: Buffer.alloc(0),
+                    secretKey: Buffer.alloc(0)
+                },
+                discriminator: Buffer.alloc(0),
+                serverPublicKey: Buffer.alloc(0),
+                maxConnectionsPerClient: 2
+            });
+
+            //@ts-ignore
+            handshakeFactory.increaseCounter("ABBA");
+
+            //@ts-ignore
+            let overflows = handshakeFactory.checkClientsOverflow("ABBA");
+            assert(overflows == false);
+        });
+    }
+}
+
+@TestSuite()
+export class HandshakeFactoryOnHandshakeError {
+    @Test()
+    public successful_call() {
+        assert.doesNotThrow(async () => {
+            let handshakeFactory = new HandshakeFactory({
+                socketFactoryConfig: {
+                    client: {
+                        socketType: "TCP",
+                        clientOptions: {
+                            "host": "host.com",
+                            "port": 99
+                        },
+                        reconnectDelay: 0,
+                    },
+
+                    server: {
+                        socketType: "WebSocket",
+                        serverOptions: {
+                            "host": "host.com",
+                            "port": 99
+                        },
+                        deniedIPs: ["192.168.5.5"],
+                        allowedIPs: ["127.0.0.1", "localhost"],
+                    },
+                    maxConnections: 0
+                },
+                keyPair: {
+                    publicKey: Buffer.alloc(0),
+                    secretKey: Buffer.alloc(0)
+                },
+                discriminator: Buffer.alloc(0),
+                serverPublicKey: Buffer.alloc(0),
+            });
+
+            //@ts-ignore
+            handshakeFactory.hookEvent = function(name, callback) {
+                assert(name == "HANDSHAKE_ERROR");
+                assert(callback == cb);
+            };
+
+            const cb = function() {
+            }
+            handshakeFactory.onHandshakeError(cb);
+        });
+    }
+}
+
+@TestSuite()
+export class HandshakeFactoryOnHandshake {
+    @Test()
+    public successful_call() {
+        assert.doesNotThrow(async () => {
+            let handshakeFactory = new HandshakeFactory({
+                socketFactoryConfig: {
+                    client: {
+                        socketType: "TCP",
+                        clientOptions: {
+                            "host": "host.com",
+                            "port": 99
+                        },
+                        reconnectDelay: 0,
+                    },
+
+                    server: {
+                        socketType: "WebSocket",
+                        serverOptions: {
+                            "host": "host.com",
+                            "port": 99
+                        },
+                        deniedIPs: ["192.168.5.5"],
+                        allowedIPs: ["127.0.0.1", "localhost"],
+                    },
+                    maxConnections: 0
+                },
+                keyPair: {
+                    publicKey: Buffer.alloc(0),
+                    secretKey: Buffer.alloc(0)
+                },
+                discriminator: Buffer.alloc(0),
+                serverPublicKey: Buffer.alloc(0),
+            });
+
+            //@ts-ignore
+            handshakeFactory.hookEvent = function(name, callback) {
+                assert(name == "HANDSHAKE");
+                assert(callback == cb);
+            };
+
+            const cb = function() {
+            }
+            handshakeFactory.onHandshake(cb);
         });
     }
 }
