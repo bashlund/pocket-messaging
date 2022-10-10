@@ -1,5 +1,12 @@
 # CHANGELOG: pocket-messaging
 
+## [1.1.0] - 20221010
+Bug fix: Properly close underlaying socket of unopened Messaging instance.  
+Add Handshakefactory + tests.  
+Bump dependency on pocket-sockets to version 1.2.0.  
+Allow peerData to be function for just-in-time peer-data creation.  
+Add tests.  
+
 ## [1.0.2] - 20220516
 Add project and compiler options.  
 
