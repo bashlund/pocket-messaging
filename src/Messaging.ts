@@ -101,6 +101,8 @@ export class Messaging {
             encrypted: []
         };
         this.eventEmitter = new EventEmitter();
+        this.socket.onError(this.socketError);
+        this.socket.onClose(this.socketClose);
     }
 
     public getInstanceId(): string {
@@ -156,8 +158,6 @@ export class Messaging {
             return;
         }
         this.isOpened = true;
-        this.socket.onError(this.socketError);
-        this.socket.onClose(this.socketClose);
         this.socket.onData(this.socketData);
         this.checkTimeouts();
     }
@@ -171,13 +171,11 @@ export class Messaging {
      *
      */
     public close() {
-        if (!this.isOpened) {
-            return;
-        }
         if (this.isClosed) {
             return;
         }
-        this.socket.close();
+        // Note the socket was already open when it was passed into Messaging.
+        this.socket?.close();
     }
 
     public cork() {

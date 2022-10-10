@@ -309,7 +309,8 @@ export class MessagingClose {
             }
             assert(flag == false);
             messaging.close();
-            assert(flag == false);
+            //@ts-ignore
+            assert(flag == true);
         });
     }
 
