@@ -4,6 +4,19 @@ A small, eventdriven cryptographic messaging library written in TypeScript for c
 
 Runs in browser and NodeJS.
 
+## Background
+This is an event-driven cryptographic (Ed25519/Sodium) communications library based on top of `pocket-sockets` which implements the SSB handshake protocol with some added optional bytes for data exchange.
+
+Rationale:  
+
+    - Using `pocket-sockets` to have a uniform interface for using both TCP sockets and WebSockets in the application.
+    - Ed25519 handshake where server public key is the known part (the SSB 4-way handshake protocol).
+    - Sodium stream encryption.
+    - The pocket-sockets layer does also support TLS encryption in the sockets layer.
+    - `pocket-messaging` brings a request/response (indefinite) cycle of communications between peers. This can make application code very sleak.
+
+
+
 ## Example
 For a quick glimpse of what it looks like to set up two participants exchanging call and response messages and then finalizing the connections, follow the example below:
 ```javascript
@@ -37,7 +50,7 @@ messaging2.open();
 }) ();
 ```
 
-For a complete example, please refer to the [./example](https://github.com/bashlund/pocket-messaging/tree/main/example) directory.
+For running examples, please refer to the [./example](https://github.com/bashlund/pocket-messaging/tree/main/example) directory.
 
 ## Reference
 Code documentation and API references are available in the official [Wiki](https://github.com/bashlund/pocket-messaging/wiki): [https://github.com/bashlund/pocket-messaging/wiki](https://github.com/bashlund/pocket-messaging/wiki).
