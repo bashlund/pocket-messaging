@@ -31,7 +31,7 @@
   "main": "build/index.js",
   "types": "build/index.d.ts",
   "scripts": {
-    "test": "./node_modules/.bin/testyts",
+    "test": "sh -c 'logFormat=\"%c[%L%l] [logging emitted from %m]:%C \" ./node_modules/.bin/testyts'",
     "docs": "./node_modules/.bin/typedoc --entryDocument Home.md --hideBreadcrumbs true --hideInPageTOC true --cleanOutputDir false ./src/*.ts",
     "c": "./node_modules/.bin/tsc",
     "prepublishOnly": "tsc"
@@ -39,6 +39,7 @@
   "dependencies": {
     "eventemitter3": "^4.0.7",
     "libsodium-wrappers": "^0.7.9",
+    "pocket-console": "0.2.0",
     "pocket-sockets": "1.2.0"
   },
   "devDependencies": {

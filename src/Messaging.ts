@@ -21,6 +21,12 @@ import {
     ExpectingReply,
 } from "./types";
 
+import {
+    PocketConsole,
+} from "pocket-console";
+
+let console = PocketConsole({module: "Messaging"});
+
 export class Messaging {
 
     /**
