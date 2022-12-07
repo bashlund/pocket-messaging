@@ -2,6 +2,7 @@ import EventEmitter from "eventemitter3";
 
 import {
     SocketFactoryConfig,
+    SocketFactoryStats,
 } from "pocket-sockets";
 
 /**
@@ -169,6 +170,8 @@ export type PeerDataGeneratorFunctionInterface = (isServer: boolean) => Buffer;
 
 export type HandshakeFactoryConfig = {
     socketFactoryConfig: SocketFactoryConfig,
+
+    socketFactoryStats?: SocketFactoryStats,
 
     /** The keypair to use in the cryptographic handshake. */
     keyPair: KeyPair,

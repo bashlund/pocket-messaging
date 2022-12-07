@@ -64,7 +64,7 @@ export class HandshakeFactory extends SocketFactory {
     protected handshakeFactoryConfig: HandshakeFactoryConfig;
 
     constructor(handshakeFactoryConfig: HandshakeFactoryConfig) {
-        super(handshakeFactoryConfig.socketFactoryConfig);
+        super(handshakeFactoryConfig.socketFactoryConfig, handshakeFactoryConfig.socketFactoryStats);
         this.handshakeFactoryConfig = handshakeFactoryConfig;
     }
 
