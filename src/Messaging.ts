@@ -66,6 +66,12 @@ export class Messaging {
      */
     protected isClosed: boolean;
 
+    /** ID of the timeout in use for ping. */
+    protected pingTimeout: ReturnType<typeof setTimeout> | undefined;
+
+    /** Milliseconds to wait between each ping. */
+    protected pingTimeoutMS: number;
+
     /**
      * Setting this activates encryption.
      */
@@ -88,11 +94,16 @@ export class Messaging {
     protected isBusyIn: number;
     protected instanceId: string;
 
-    constructor(socket: Client) {
+    /**
+     * @param the underlying socket to use.
+     * @param pingTimeoutMS optionally send frequent pings on the socket to detect silent disconnects.
+     */
+    constructor(socket: Client, pingTimeoutMS?: number) {
         this.socket = socket;
         this.pendingReply = {};
         this.isOpened = false;
         this.isClosed = false;
+        this.pingTimeoutMS = pingTimeoutMS ?? 10000;
         this.dispatchLimit = -1;
         this.isBusyOut = 0;
         this.isBusyIn = 0;
@@ -299,6 +310,31 @@ export class Messaging {
         return {eventEmitter, msgId};
     }
 
+    /**
+     * Enable to send frequent pings on the socket.
+     * This will help to detect silent disconnects.
+     * @param timeoutMS how many milliseconds to wait between each ping.
+     * Default is 10000 (10 sec).
+     */
+    public enablePing(timeoutMS: number = 10000) {
+        if (this.isClosed) {
+            return;
+        }
+
+        this.disablePing();
+
+        this.pingTimeoutMS = timeoutMS;
+
+        this.pingTimeout = setTimeout( this.sendPing, this.pingTimeoutMS );
+    }
+
+    public disablePing() {
+        if (this.pingTimeout) {
+            clearTimeout(this.pingTimeout);
+            this.pingTimeout = undefined;
+        }
+    }
+
     protected getNow(): number {
         return Date.now();
     }
@@ -447,6 +483,11 @@ export class Messaging {
             return;
         }
         this.isClosed = true;
+
+        if (this.pingTimeout) {
+            clearTimeout(this.pingTimeout);
+        }
+
         const eventEmitters = this.getAllEventEmitters();
         this.pendingReply = {};  // Remove all from memory
         const closeEvent: CloseEvent = {
@@ -458,6 +499,22 @@ export class Messaging {
             event: closeEvent
         };
         this.emitEvent(eventEmitters, EventType.ANY, anyEvent);
+    }
+
+    /**
+     * Send a ping to remote to force a disconnect event in the case
+     * the socket has silently closed.
+     * There is no reply expected on the ping.
+     */
+    protected sendPing = () => {
+        if (this.isClosed || !this.pingTimeout) {
+            return;
+        }
+
+        // Send empty message with an un-routable target.
+        this.send(Buffer.from([0]));
+
+        this.pingTimeout = setTimeout( this.sendPing, this.pingTimeoutMS );
     }
 
     /**
