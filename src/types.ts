@@ -198,4 +198,13 @@ export type HandshakeFactoryConfig = {
 
     /** If set, the maximum no of connections each cryptographically handshaked publicKey is allowed. */
     maxConnectionsPerClient?: number,
+
+    /**
+     * If set, the maximum no of connections per connected client pair.
+     * This is useful for peer-to-peer clients who both have client and server sockets
+     * and we only desire a single connection between the client pair.
+     * When setting maxConnectionsPerClient=1 there can still be two connections open,
+     * but when setting maxConnectionsPerClientPair=1 we can cap the no of connectio to one per pair of clients.
+     */
+    maxConnectionsPerClientPair?: number,
 };

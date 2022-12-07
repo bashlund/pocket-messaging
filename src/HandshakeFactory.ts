@@ -131,25 +131,46 @@ export class HandshakeFactory extends SocketFactory {
     /**
      * Increase the counter connections per client public key.
      */
-    protected increaseClientsCounter(publicKey: string) {
-        this.increaseCounter(publicKey);
+    protected increaseClientsCounter(peerPublicKey: string) {
+        this.increaseCounter(peerPublicKey);
+
+        const pair = [peerPublicKey, this.handshakeFactoryConfig.keyPair.publicKey.toString("hex")];
+        pair.sort();
+        const pairKey = pair.join(":");
+        this.increaseCounter(pairKey);
     }
 
-    protected decreaseClientsCounter(publicKey: string) {
-        this.decreaseCounter(publicKey);
+    protected decreaseClientsCounter(peerPublicKey: string) {
+        this.decreaseCounter(peerPublicKey);
+
+        const pair = [peerPublicKey, this.handshakeFactoryConfig.keyPair.publicKey.toString("hex")];
+        pair.sort();
+        const pairKey = pair.join(":");
+        this.decreaseCounter(pairKey);
     }
 
     /**
-     * @params publicKey
+     * @params peerPublicKey
      * @returns true if any limit is reached.
      */
-    protected checkClientsOverflow(publicKey: string): boolean {
+    protected checkClientsOverflow(peerPublicKey: string): boolean {
         if (this.handshakeFactoryConfig.maxConnectionsPerClient !== undefined) {
-            const clientCount = this.readCounter(publicKey);
+            const clientCount = this.readCounter(peerPublicKey);
             if (clientCount >= this.handshakeFactoryConfig.maxConnectionsPerClient) {
                 return true;
             }
         }
+
+        if (this.handshakeFactoryConfig.maxConnectionsPerClientPair !== undefined) {
+            const pair = [peerPublicKey, this.handshakeFactoryConfig.keyPair.publicKey.toString("hex")];
+            pair.sort();
+            const pairKey = pair.join(":");
+            const clientPairCount = this.readCounter(pairKey);
+            if (clientPairCount >= this.handshakeFactoryConfig.maxConnectionsPerClientPair) {
+                return true;
+            }
+        }
+
         return false;
     }
 
