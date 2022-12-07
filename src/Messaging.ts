@@ -228,8 +228,8 @@ export class Messaging {
      *  The receiving Messaging instance will check if target matches a msg ID which is waiting for a reply and in such case the message till be emitted on that EventEmitter,
      *  or else it will pass it to the router to see if it matches some route.
      * @param data: Buffer of data to be sent. Note that data cannot exceed MESSAGE_MAX_BYTES (64 KiB).
-     * @param timeout milliseconds to wait for the first reply (defaults to undefined)
-     *     undefined means we are not expecting a reply
+     * @param timeout milliseconds to wait for the first reply (defaults to -1)
+     *     -1 means we are not expecting a reply
      *     0 or greater means that we are expecting a reply, 0 means wait forever
      * @param stream set to true if expecting multiple replies (defaults to false)
      *     This requires that timeout is set to 0 or greater
@@ -239,7 +239,7 @@ export class Messaging {
      *     msgId is always set
      *     eventEmitter property is set if expecting reply
      */
-    public send(target: Buffer | string, data?: Buffer, timeout: number | undefined = undefined, stream: boolean = false, timeoutStream: number = 0): SendReturn | undefined {
+    public send(target: Buffer | string, data?: Buffer, timeout: number = -1, stream: boolean = false, timeoutStream: number = 0): SendReturn | undefined {
         if (!this.isOpened) {
             return undefined;
         }
@@ -264,7 +264,7 @@ export class Messaging {
 
         const msgId = this.generateMsgId();
 
-        const expectingReply = typeof timeout === "number" ? (stream ? ExpectingReply.MULTIPLE : ExpectingReply.SINGLE) : ExpectingReply.NONE;
+        const expectingReply = timeout > -1 ? (stream ? ExpectingReply.MULTIPLE : ExpectingReply.SINGLE) : ExpectingReply.NONE;
 
         const header: Header = {
             version: 0,
@@ -288,7 +288,7 @@ export class Messaging {
         this.pendingReply[msgId.toString("hex")] = {
             timestamp: this.getNow(),
             msgId,
-            timeout: Number(timeout),
+            timeout: timeout,
             stream: Boolean(stream),
             eventEmitter,
             timeoutStream: timeoutStream,
@@ -764,7 +764,7 @@ export class Messaging {
                 continue;
             }
             if (sentMessage.replyCounter === 0) {
-                if (sentMessage.timeout && now > sentMessage.timestamp + sentMessage.timeout) {
+                if (sentMessage.timeout > 0 && now > sentMessage.timestamp + sentMessage.timeout) {
                     timeouted.push(sentMessage);
                 }
             }
