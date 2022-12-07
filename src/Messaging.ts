@@ -147,6 +147,29 @@ export class Messaging {
     }
 
     /**
+     * See if a specific msgId is pending a reply.
+     * @param msgId the ID of the message to check if it is pending a reply.
+     * @returns true if message identified by msgId is pending a reply.
+     */
+    public isMessagePending = (msgId: Buffer): boolean => {
+        if (this.pendingReply[msgId.toString("hex")]) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * This pauses all timeouts for a message until the next message arrives then timeouts are re-activated (if set initially ofc).
+     * This could be useful when expecting a never ending stream of messages where chunks could be time apart.
+     */
+    public clearTimeout = (msgId: Buffer) => {
+        const sentMessage = this.pendingReply[msgId.toString("hex")];
+        if (sentMessage) {
+            sentMessage.isCleared = true;
+        }
+    };
+
+    /**
      * Get the general event emitter object.
      * This is used to listen for incoming messages
      * and socket events such as close and error.
@@ -753,17 +776,6 @@ export class Messaging {
         }
         return timeouted;
     }
-
-    /**
-     * This pauses all timeouts for a message until the next message arrives then timeouts are re-activated (if set initially ofc).
-     * This could be useful when expecting a never ending stream of messages where chunks could be time apart.
-     */
-    public clearTimeout = (msgId: Buffer) => {
-        const sentMessage = this.pendingReply[msgId.toString("hex")];
-        if (sentMessage) {
-            sentMessage.isCleared = true;
-        }
-    };
 }
 
 /**
