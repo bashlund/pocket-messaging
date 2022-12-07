@@ -33,43 +33,43 @@ export class Messaging {
      * Messages sent from here which are expecting replies.
      *
      */
-    pendingReply: {[msgId: string]: SentMessage};
+    protected pendingReply: {[msgId: string]: SentMessage};
 
     /**
      * Data read on socket and transformed to messages.
      */
-    incomingQueue: IncomingQueue;
+    protected incomingQueue: IncomingQueue;
 
     /**
      * Messages transformed and sent.
      */
-    outgoingQueue: OutgoingQueue;
+    protected outgoingQueue: OutgoingQueue;
 
     /**
      * The general event emitter for incoming messages and socket events.
      * Reply messages are not emitted using this object but are emitted on message specific event emitters.
      */
-    eventEmitter: EventEmitter;
+    protected eventEmitter: EventEmitter;
 
     /**
      * The given client socket to communicate with.
      */
-    socket: Client;
+    protected socket: Client;
 
     /**
      * Set to true if we have opened.
      */
-    isOpened: boolean;
+    protected isOpened: boolean;
 
     /**
      * Set to true if we have closed.
      */
-    isClosed: boolean;
+    protected isClosed: boolean;
 
     /**
      * Setting this activates encryption.
      */
-    encryptionKeys?: {
+    protected encryptionKeys?: {
         outgoingKey: Buffer,    // Used for box encryption
         outgoingNonce: Buffer,  // Used for box encryption
         incomingKey: Buffer,    // Used for box decryption
@@ -82,11 +82,11 @@ export class Messaging {
      * 0 means cork it up
      * -1 means unlimited.
      */
-    dispatchLimit: number;
+    protected dispatchLimit: number;
 
-    isBusyOut: number;
-    isBusyIn: number;
-    instanceId: string;
+    protected isBusyOut: number;
+    protected isBusyIn: number;
+    protected instanceId: string;
 
     constructor(socket: Client) {
         this.socket = socket;
