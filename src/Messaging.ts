@@ -19,6 +19,7 @@ import {
     MESSAGE_MAX_BYTES,
     SendReturn,
     ExpectingReply,
+    DEFAULT_PING_INTERVAL,
 } from "./types";
 
 import {
@@ -70,7 +71,7 @@ export class Messaging {
     protected pingTimeout: ReturnType<typeof setTimeout> | undefined;
 
     /** Milliseconds to wait between each ping. */
-    protected pingTimeoutMS: number;
+    protected pingInterval: number;
 
     /**
      * Setting this activates encryption.
@@ -96,14 +97,14 @@ export class Messaging {
 
     /**
      * @param the underlying socket to use.
-     * @param pingTimeoutMS optionally send frequent pings on the socket to detect silent disconnects.
+     * @param pingInterval in milliseconds, set to send frequent pings on the socket to detect silent disconnects.
      */
-    constructor(socket: Client, pingTimeoutMS?: number) {
+    constructor(socket: Client, pingInterval?: number) {
         this.socket = socket;
         this.pendingReply = {};
         this.isOpened = false;
         this.isClosed = false;
-        this.pingTimeoutMS = pingTimeoutMS ?? 10000;
+        this.pingInterval = pingInterval ?? DEFAULT_PING_INTERVAL;
         this.dispatchLimit = -1;
         this.isBusyOut = 0;
         this.isBusyIn = 0;
@@ -120,6 +121,10 @@ export class Messaging {
         this.eventEmitter = new EventEmitter();
         this.socket.onError(this.socketError);
         this.socket.onClose(this.socketClose);
+
+        if (this.pingInterval > 0) {
+            this.enablePing(this.pingInterval);
+        }
     }
 
     public getInstanceId(): string {
@@ -313,19 +318,21 @@ export class Messaging {
     /**
      * Enable to send frequent pings on the socket.
      * This will help to detect silent disconnects.
-     * @param timeoutMS how many milliseconds to wait between each ping.
-     * Default is 10000 (10 sec).
+     * @param pingInterval how many milliseconds to wait between each ping.
+     * Default is 10000 (10 sec). 0 means disabled.
      */
-    public enablePing(timeoutMS: number = 10000) {
+    public enablePing(pingInterval: number = 10000) {
         if (this.isClosed) {
             return;
         }
 
         this.disablePing();
 
-        this.pingTimeoutMS = timeoutMS;
+        this.pingInterval = pingInterval;
 
-        this.pingTimeout = setTimeout( this.sendPing, this.pingTimeoutMS );
+        if (this.pingInterval > 0) {
+            this.pingTimeout = setTimeout( this.sendPing, this.pingInterval );
+        }
     }
 
     public disablePing() {
@@ -460,7 +467,7 @@ export class Messaging {
      * Notify all pending messages and the main emitter about the error.
      *
      */
-    protected socketError = (error?: Buffer) => {
+    protected socketError = (error: string) => {
         const eventEmitters = this.getAllEventEmitters();
 
         const errorEvent: ErrorEvent = {
@@ -484,9 +491,7 @@ export class Messaging {
         }
         this.isClosed = true;
 
-        if (this.pingTimeout) {
-            clearTimeout(this.pingTimeout);
-        }
+        this.disablePing();
 
         const eventEmitters = this.getAllEventEmitters();
         this.pendingReply = {};  // Remove all from memory
@@ -507,14 +512,16 @@ export class Messaging {
      * There is no reply expected on the ping.
      */
     protected sendPing = () => {
-        if (this.isClosed || !this.pingTimeout) {
+        if (this.isClosed) {
             return;
         }
 
         // Send empty message with an un-routable target.
         this.send(Buffer.from([0]));
 
-        this.pingTimeout = setTimeout( this.sendPing, this.pingTimeoutMS );
+        if (this.pingInterval > 0) {
+            this.pingTimeout = setTimeout( this.sendPing, this.pingInterval );
+        }
     }
 
     /**

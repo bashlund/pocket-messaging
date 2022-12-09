@@ -5,6 +5,8 @@ import {
     SocketFactoryStats,
 } from "pocket-sockets";
 
+export const DEFAULT_PING_INTERVAL = 10000;  // Milliseconds.
+
 /**
  * A single message cannot exceed 65535 bytes in total.
  */
@@ -207,4 +209,11 @@ export type HandshakeFactoryConfig = {
      * but when setting maxConnectionsPerClientPair=1 we can cap the no of connectio to one per pair of clients.
      */
     maxConnectionsPerClientPair?: number,
+
+    /**
+     * If set > 0 then the Messaging instances will be configured to
+     * frequently send pings to detect silent disconnects of the underlying socket.
+     * Unit is milliseconds.
+     */
+    pingInterval?: number,
 };

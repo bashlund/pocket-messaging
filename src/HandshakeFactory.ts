@@ -92,7 +92,7 @@ export class HandshakeFactory extends SocketFactory {
 
     protected handleOnConnect: ConnectCallback = async (e) => {
         try {
-            const messaging = new Messaging(e.client);
+            const messaging = new Messaging(e.client, this.handshakeFactoryConfig.pingInterval);
             let handshakeResult: HandshakeResult;
             let peerData: Buffer | undefined;
             if (typeof this.handshakeFactoryConfig.peerData === "function") {
