@@ -68,6 +68,28 @@ export class HandshakeFactory extends SocketFactory {
         this.handshakeFactoryConfig = handshakeFactoryConfig;
     }
 
+    /** Override from parent. */
+    protected checkConnectionsOverflow(address: string, isServer: boolean = false): boolean {
+        if (super.checkConnectionsOverflow(address, isServer)) {
+            return true;
+        }
+
+        if (!isServer) {
+            if (this.handshakeFactoryConfig.maxConnectionsPerClientPair !== undefined) {
+                const pair = [this.handshakeFactoryConfig.serverPublicKey?.toString("hex"),
+                    this.handshakeFactoryConfig.keyPair.publicKey.toString("hex")];
+                pair.sort();
+                const pairKey = pair.join(":");
+                const clientPairCount = this.readCounter(pairKey);
+                if (clientPairCount >= this.handshakeFactoryConfig.maxConnectionsPerClientPair) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
     protected handleOnConnect: ConnectCallback = async (e) => {
         try {
             const messaging = new Messaging(e.client);
