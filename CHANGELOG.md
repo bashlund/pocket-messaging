@@ -1,5 +1,15 @@
 # CHANGELOG: pocket-messaging
 
+## [2.0.0] - 20221209
+Add shared SocketFactoryStats usage to HandshakeFactory.  
+Change Messaging.send call signature for timeout to be strictly number (breaking call signature change).  
+Add Messaging.isMessagePending function.  
+Add pocket-console as logging utility.  
+npm audit fix on external dependency.  
+Add maxConnectionsPerClientPair limit to HandshakeFactory.  
+Add ping functionality for more aggressive disconnection detection.  
+Change ErrorEvent.error type from Buffer to string.  
+
 ## [1.1.0] - 20221010
 Bug fix: Properly close underlaying socket of unopened Messaging instance.  
 Add Handshakefactory + tests.  
