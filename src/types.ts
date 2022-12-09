@@ -98,7 +98,7 @@ export type TimeoutEvent = {
 };
 
 export type ErrorEvent = {
-    error?: Buffer
+    error: string,
 };
 
 export type AnyEvent = {
