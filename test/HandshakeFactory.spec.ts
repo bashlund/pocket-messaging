@@ -10,6 +10,7 @@ export class HandshakeFactoryConstructor {
     public successful_call() {
         assert.doesNotThrow(() => {
             let handshakeFactory = new HandshakeFactory({
+                pingInterval: 0,
                 socketFactoryConfig: {
                     maxConnections: 9
                 },
@@ -44,6 +45,7 @@ export class HandshakeFactoryHandleOnConnect {
     public successful_call_client() {
         assert.doesNotThrow(async () => {
             let handshakeFactory = new HandshakeFactory({
+                pingInterval: 0,
                 socketFactoryConfig: {
                     client: {
                         socketType: "TCP",
@@ -88,6 +90,7 @@ export class HandshakeFactoryHandleOnConnect {
     public successful_call_server() {
         assert.doesNotThrow(async () => {
             let handshakeFactory = new HandshakeFactory({
+                pingInterval: 0,
                 socketFactoryConfig: {
                     client: {
                         socketType: "TCP",
@@ -132,6 +135,7 @@ export class HandshakeFactoryHandleOnConnect {
     public successful_call_client_missing_serverPublicKey() {
         assert.doesNotThrow(async () => {
             let handshakeFactory = new HandshakeFactory({
+                pingInterval: 0,
                 socketFactoryConfig: {
                     client: {
                         socketType: "TCP",
@@ -184,6 +188,7 @@ export class HandshakeFactoryHandleOnConnect {
     public successful_call_client_handshake_error() {
         assert.doesNotThrow(async () => {
             let handshakeFactory = new HandshakeFactory({
+                pingInterval: 0,
                 socketFactoryConfig: {
                     client: {
                         socketType: "TCP",
@@ -241,6 +246,7 @@ export class HandshakeFactoryInit {
     public successful_call() {
         assert.doesNotThrow(async () => {
             let handshakeFactory = new HandshakeFactory({
+                pingInterval: 0,
                 socketFactoryConfig: {
                     client: {
                         socketType: "TCP",
@@ -299,6 +305,7 @@ export class HandshakeFactoryIncreaseDecreaseClientsCounter {
     public successful_call() {
         assert.doesNotThrow(async () => {
             let handshakeFactory = new HandshakeFactory({
+                pingInterval: 0,
                 socketFactoryConfig: {
                     client: {
                         socketType: "TCP",
@@ -360,6 +367,7 @@ export class HandshakeFactoryCheckClientsOverflow {
     public configuration_undefined() {
         assert.doesNotThrow(async () => {
             let handshakeFactory = new HandshakeFactory({
+                pingInterval: 0,
                 socketFactoryConfig: {
                     client: {
                         socketType: "TCP",
@@ -399,6 +407,7 @@ export class HandshakeFactoryCheckClientsOverflow {
     public overflows() {
         assert.doesNotThrow(async () => {
             let handshakeFactory = new HandshakeFactory({
+                pingInterval: 0,
                 socketFactoryConfig: {
                     client: {
                         socketType: "TCP",
@@ -442,6 +451,7 @@ export class HandshakeFactoryCheckClientsOverflow {
     public within_range() {
         assert.doesNotThrow(async () => {
             let handshakeFactory = new HandshakeFactory({
+                pingInterval: 0,
                 socketFactoryConfig: {
                     client: {
                         socketType: "TCP",
@@ -488,6 +498,7 @@ export class HandshakeFactoryOnHandshakeError {
     public successful_call() {
         assert.doesNotThrow(async () => {
             let handshakeFactory = new HandshakeFactory({
+                pingInterval: 0,
                 socketFactoryConfig: {
                     client: {
                         socketType: "TCP",
@@ -536,6 +547,7 @@ export class HandshakeFactoryOnHandshake {
     public successful_call() {
         assert.doesNotThrow(async () => {
             let handshakeFactory = new HandshakeFactory({
+                pingInterval: 0,
                 socketFactoryConfig: {
                     client: {
                         socketType: "TCP",

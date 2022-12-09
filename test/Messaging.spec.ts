@@ -1,3 +1,6 @@
+//@ts-nocheck disable check for now since access modifiers have been set in Messaging.
+//
+
 import { TestSuite, Test, AfterAll, expect } from 'testyts';
 
 import EventEmitter from "eventemitter3";
@@ -18,8 +21,8 @@ export class MessagingSpec {
 
     constructor() {
         [this.socket1, this.socket2] = CreatePair();
-        this.messaging1 = new Messaging(this.socket1);
-        this.messaging2 = new Messaging(this.socket2);
+        this.messaging1 = new Messaging(this.socket1, 0);
+        this.messaging2 = new Messaging(this.socket2, 0);
         this.eventEmitter1 = this.messaging1.getEventEmitter();
         this.eventEmitter2 = this.messaging1.getEventEmitter();
     }
@@ -179,7 +182,7 @@ export class MessagingConstructor {
     @Test()
     public default_state() {
         let [socket, _] = CreatePair();
-        let messaging = new Messaging(socket);
+        let messaging = new Messaging(socket, 0);
         assert(Object.keys(messaging.pendingReply).length == 0);
 
         assert(!messaging.isOpened);
@@ -207,7 +210,7 @@ export class MessagingSetEncrypted {
     @Test()
     public successful_call() {
         let [socket, _] = CreatePair();
-        let messaging = new Messaging(socket);
+        let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(async function() {
             assert(!messaging.getPeerPublicKey());
             assert(!messaging.encryptionKeys);
@@ -228,7 +231,7 @@ export class MessagingSetUnencrypted {
     @Test()
     public successful_call() {
         let [socket, _] = CreatePair();
-        let messaging = new Messaging(socket);
+        let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(async function() {
             const outKey = Buffer.alloc(32);
             const outNonce = Buffer.alloc(24);
@@ -248,7 +251,7 @@ export class MessagingOpen {
     @Test()
     public already_closed() {
         let [socket, _] = CreatePair();
-        let messaging = new Messaging(socket);
+        let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(function() {
             messaging.isClosed = true;
             assert(messaging.isOpened == false);
@@ -260,7 +263,7 @@ export class MessagingOpen {
     @Test()
     public already_opened() {
         let [socket, _] = CreatePair();
-        let messaging = new Messaging(socket);
+        let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(function() {
             messaging.isOpened = true;
             let flag = false;
@@ -278,7 +281,7 @@ export class MessagingOpen {
     @Test()
     public successful_call() {
         let [socket, _] = CreatePair();
-        let messaging = new Messaging(socket);
+        let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(function() {
             let flag = false;
             // Expected to be called only on success
@@ -301,7 +304,7 @@ export class MessagingClose {
     @Test()
     public already_closed() {
         let [socket, _] = CreatePair();
-        let messaging = new Messaging(socket);
+        let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(function() {
             let flag = false;
             messaging.socket.close = function() {
@@ -317,7 +320,7 @@ export class MessagingClose {
     @Test()
     public successful_call() {
         let [socket, _] = CreatePair();
-        let messaging = new Messaging(socket);
+        let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(function() {
             assert(messaging.isClosed == false);
             assert(messaging.isOpened == false);
@@ -334,7 +337,7 @@ export class MessagingCorkUncork {
     @Test()
     public successful_call() {
         let [socket, _] = CreatePair();
-        let messaging = new Messaging(socket);
+        let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(function() {
             messaging.uncork(30);
             assert(messaging.dispatchLimit == 30);
@@ -346,7 +349,7 @@ export class MessagingCorkUncork {
     @Test()
     public uncork_without_parameters() {
         let [socket, _] = CreatePair();
-        let messaging = new Messaging(socket);
+        let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(function() {
             assert(messaging.dispatchLimit == -1);
             messaging.uncork(30);
@@ -362,7 +365,7 @@ export class MessagingSend {
     @Test()
     public not_open_noop() {
         let [socket, _] = CreatePair();
-        let messaging = new Messaging(socket);
+        let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(function() {
             assert(messaging.isOpened == false);
             assert(Object.keys(messaging.pendingReply).length == 0);
@@ -374,7 +377,7 @@ export class MessagingSend {
     @Test()
     public isClosed_noop() {
         let [socket, _] = CreatePair();
-        let messaging = new Messaging(socket);
+        let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(function() {
             messaging.isClosed = true;
             assert(Object.keys(messaging.pendingReply).length == 0);
@@ -386,7 +389,7 @@ export class MessagingSend {
     @Test()
     public exceed_target_length() {
         let [socket, _] = CreatePair();
-        let messaging = new Messaging(socket);
+        let messaging = new Messaging(socket, 0);
         assert.throws(function() {
             assert(Object.keys(messaging.pendingReply).length == 0);
             messaging.isOpened = true;
@@ -399,7 +402,7 @@ export class MessagingSend {
     @Test()
     public successful_call_no_reply() {
         let [socket, _] = CreatePair();
-        let messaging = new Messaging(socket);
+        let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(function() {
             assert(messaging.outgoingQueue.unencrypted.length == 0);
             assert(Object.keys(messaging.pendingReply).length == 0);
@@ -416,7 +419,7 @@ export class MessagingSend {
     @Test()
     public successful_call_expectingReply() {
         let [socket, _] = CreatePair();
-        let messaging = new Messaging(socket);
+        let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(function() {
             assert(messaging.outgoingQueue.unencrypted.length == 0);
             assert(Object.keys(messaging.pendingReply).length == 0);
@@ -435,7 +438,7 @@ export class MessagingEncodeHeader {
     @Test()
     public target_length_exceeded() {
         let [socket, _] = CreatePair();
-        let messaging = new Messaging(socket);
+        let messaging = new Messaging(socket, 0);
         assert.throws(function() {
             //@ts-ignore protected function
             const id = messaging.generateMsgId();
@@ -454,7 +457,7 @@ export class MessagingEncodeHeader {
     @Test()
     public msgId_length_exceeded() {
         let [socket, _] = CreatePair();
-        let messaging = new Messaging(socket);
+        let messaging = new Messaging(socket, 0);
         assert.throws(function() {
             const header: Header = {
                 version: 0,
@@ -474,7 +477,7 @@ export class MessagingDecodeHeader {
     @Test()
     public unsupported_version() {
         let [socket, _] = CreatePair();
-        let messaging = new Messaging(socket);
+        let messaging = new Messaging(socket, 0);
         assert.throws(function() {
             //@ts-ignore protected function
             const id = messaging.generateMsgId();
@@ -496,7 +499,7 @@ export class MessagingDecodeHeader {
     @Test()
     public buffer_length_mismatch() {
         let [socket, _] = CreatePair();
-        let messaging = new Messaging(socket);
+        let messaging = new Messaging(socket, 0);
         assert.throws(function() {
             //@ts-ignore protected function
             const id = messaging.generateMsgId();
@@ -521,7 +524,7 @@ export class MessagingSocketClose {
     @Test()
     public alreadyClosed_noop() {
         let [socket, _] = CreatePair();
-        let messaging = new Messaging(socket);
+        let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(function() {
             messaging.isClosed = true;
             //@ts-ignore protected function
@@ -533,7 +536,7 @@ export class MessagingSocketClose {
     @Test()
     public successful_call() {
         let [socket, _] = CreatePair();
-        let messaging = new Messaging(socket);
+        let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(function() {
             //@ts-ignore protected function
             messaging.emitEvent = function(emitters: EventEmitter[], type: EventType, arg: any) {
@@ -554,7 +557,7 @@ export class MessagingSocketData {
     @Test()
     public successful_call() {
         let [socket, _] = CreatePair();
-        let messaging = new Messaging(socket);
+        let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(function() {
 
             let flag = false;
@@ -580,7 +583,7 @@ export class MessagingProcessInqueue {
     @Test()
     public not_busy_noop() {
         let [socket, _] = CreatePair();
-        let messaging = new Messaging(socket);
+        let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(function() {
 
             let flag = false;
@@ -600,7 +603,7 @@ export class MessagingProcessInqueue {
     @Test()
     public successful_call() {
         let [socket, _] = CreatePair();
-        let messaging = new Messaging(socket);
+        let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(async function() {
 
             let counter = 0;
@@ -629,7 +632,7 @@ export class MessagingDecryptIncoming {
     @Test()
     public unencrypted() {
         let [socket, _] = CreatePair();
-        let messaging = new Messaging(socket);
+        let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(async function() {
 
             messaging.incomingQueue.encrypted.push(Buffer.from(""));
@@ -646,7 +649,7 @@ export class MessagingDecryptIncoming {
     @Test()
     public encrypted_data_not_ready() {
         let [socket, _] = CreatePair();
-        let messaging = new Messaging(socket);
+        let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(async function() {
             const keyPair = {
                 publicKey: Buffer.from(""),
@@ -676,7 +679,7 @@ export class MessagingAssembleIncoming {
     @Test()
     public no_data_noop() {
         let [socket, _] = CreatePair();
-        let messaging = new Messaging(socket);
+        let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(async function() {
 
             messaging.incomingQueue.encrypted.push(Buffer.from(""));
@@ -691,7 +694,7 @@ export class MessagingAssembleIncoming {
     @Test()
     public not_enough_data() {
         let [socket, _] = CreatePair();
-        let messaging = new Messaging(socket);
+        let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(async function() {
 
             messaging.incomingQueue.encrypted.push(Buffer.from("1234"));
@@ -705,7 +708,7 @@ export class MessagingAssembleIncoming {
     @Test()
     public bad_version() {
         let [socket, _] = CreatePair();
-        let messaging = new Messaging(socket);
+        let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(async function() {
 
             messaging.incomingQueue.encrypted.push(Buffer.from("12345"));
@@ -723,7 +726,7 @@ export class MessagingAssembleIncoming {
     @Test()
     public not_enough_data_extractBuffer() {
         let [socket, _] = CreatePair();
-        let messaging = new Messaging(socket);
+        let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(async function() {
 
             messaging.incomingQueue.encrypted.push(Buffer.from("12345"));
@@ -744,7 +747,7 @@ export class MessagingAssembleIncoming {
     @Test()
     public bad_stream_decodeHeader() {
         let [socket, _] = CreatePair();
-        let messaging = new Messaging(socket);
+        let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(async function() {
 
             messaging.incomingQueue.encrypted.push(Buffer.from("12345"));
@@ -769,7 +772,7 @@ export class MessagingAssembleIncoming {
     @Test()
     public successful_call() {
         let [socket, _] = CreatePair();
-        let messaging = new Messaging(socket);
+        let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(async function() {
 
             messaging.incomingQueue.encrypted.push(Buffer.from("12345"));
@@ -800,7 +803,7 @@ export class MessagingDispatchIncoming {
     @Test()
     public no_data_noop() {
         let [socket, _] = CreatePair();
-        let messaging = new Messaging(socket);
+        let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(async function() {
 
             messaging.incomingQueue.encrypted.push(Buffer.from(""));
@@ -815,7 +818,7 @@ export class MessagingDispatchIncoming {
     @Test()
     public dispatchLimit_is_zero() {
         let [socket, _] = CreatePair();
-        let messaging = new Messaging(socket);
+        let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(async function() {
 
             messaging.incomingQueue.encrypted.push(Buffer.from("12345"));
@@ -846,7 +849,7 @@ export class MessagingDispatchIncoming {
     @Test()
     public dispatchLimit_is_one() {
         let [socket, _] = CreatePair();
-        let messaging = new Messaging(socket);
+        let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(async function() {
 
             messaging.incomingQueue.encrypted.push(Buffer.from("12345"));
@@ -877,7 +880,7 @@ export class MessagingDispatchIncoming {
     @Test()
     public successful_call() {
         let [socket, _] = CreatePair();
-        let messaging = new Messaging(socket);
+        let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(async function() {
 
             messaging.incomingQueue.encrypted.push(Buffer.from("12345"));
@@ -910,7 +913,7 @@ export class MessagingProcessOutqueue {
     @Test()
     public isBusyOut_noop() {
         let [socket, _] = CreatePair();
-        let messaging = new Messaging(socket);
+        let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(async function() {
 
             messaging.isBusyOut = 0;
@@ -934,7 +937,7 @@ export class MessagingProcessOutqueue {
     @Test()
     public successful_call() {
         let [socket, _] = CreatePair();
-        let messaging = new Messaging(socket);
+        let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(async function() {
             messaging.isBusyOut = 1;
 
@@ -964,7 +967,7 @@ export class MessagingEncryptOutgoing {
     @Test()
     public unencrypted_successful_call() {
         let [socket, _] = CreatePair();
-        let messaging = new Messaging(socket);
+        let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(async function() {
             messaging.isOpened = true;
             messaging.isClosed = false;
@@ -981,7 +984,7 @@ export class MessagingEncryptOutgoing {
     @Test()
     public encrypted_successful_call() {
         let [socket, _] = CreatePair();
-        let messaging = new Messaging(socket);
+        let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(async function() {
             messaging.isOpened = true;
             messaging.isClosed = false;
@@ -1008,7 +1011,7 @@ export class MessagingDispatchOutgoing {
     @Test()
     public no_encrypted_data_noop() {
         let [socket, _] = CreatePair();
-        let messaging = new Messaging(socket);
+        let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(async function() {
             assert(messaging.outgoingQueue.encrypted.length == 0);
             //@ts-ignore: protected function
@@ -1020,7 +1023,7 @@ export class MessagingDispatchOutgoing {
     @Test()
     public successful_call() {
         let [socket, _] = CreatePair();
-        let messaging = new Messaging(socket);
+        let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(async function() {
             messaging.isOpened = true;
             messaging.isClosed = false;
@@ -1054,7 +1057,7 @@ export class MessagingCheckTimeouts {
     @Test()
     public unset_isOpened_noop() {
         let [socket, _] = CreatePair();
-        let messaging = new Messaging(socket);
+        let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(async function() {
             messaging.isOpened = false;
             //@ts-ignore: protected function
@@ -1065,7 +1068,7 @@ export class MessagingCheckTimeouts {
     @Test()
     public set_isClosed_noop() {
         let [socket, _] = CreatePair();
-        let messaging = new Messaging(socket);
+        let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(async function() {
             messaging.isClosed = true;
             //@ts-ignore: protected function
@@ -1076,7 +1079,7 @@ export class MessagingCheckTimeouts {
     @Test()
     public successful_call() {
         let [socket, _] = CreatePair();
-        let messaging = new Messaging(socket);
+        let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(async function() {
             messaging.open();
             assert(messaging.isOpened == true);
@@ -1117,7 +1120,7 @@ export class MessagingGetTimeoutedPendingMessages {
     @Test()
     public successful_call_timeout() {
         let [socket, _] = CreatePair();
-        let messaging = new Messaging(socket);
+        let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(async function() {
             messaging.isOpened = true;
             messaging.isClosed = false;
@@ -1140,7 +1143,7 @@ export class MessagingGetTimeoutedPendingMessages {
     @Test()
     public successful_call_no_timeout() {
         let [socket, _] = CreatePair();
-        let messaging = new Messaging(socket);
+        let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(async function() {
             messaging.isOpened = true;
             messaging.isClosed = false;
