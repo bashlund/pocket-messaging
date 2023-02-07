@@ -1,5 +1,9 @@
 # CHANGELOG: pocket-messaging
 
+## [2.1.0] - 20230208
+Add Messaging.getClient() to get access to the underlaying socket.  
+Update package lock file to reflect security advisory (for devDependencies).  
+
 ## [2.0.0] - 20221209
 Add shared SocketFactoryStats usage to HandshakeFactory.  
 Change Messaging.send call signature for timeout to be strictly number (breaking call signature change).  

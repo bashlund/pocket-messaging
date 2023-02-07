@@ -557,12 +557,12 @@ export async function HandshakeAsServer(client: Client, serverLongtermSk: Buffer
             if (allowedClientKey) {
                 if (typeof(allowedClientKey) === "function") {
                     if (!allowedClientKey(clientLongtermPk)) {
-                        throw "Client longterm pk not allowed by function";
+                        throw `Client longterm pk (${clientLongtermPk.toString("hex")} not allowed by function, IP: ${client.getRemoteAddress()}`;
                     }
                 }
                 else if (Array.isArray(allowedClientKey)) {
                     if (!allowedClientKey.find( (pk) => Equals(pk, clientLongtermPk) )) {
-                        throw "Client longterm pk not in list of allowed public keys";
+                        throw `Client longterm pk (${clientLongtermPk.toString("hex")}) not in list of allowed public keys, IP: ${client.getRemoteAddress()}`;
                     }
                 }
                 else {

@@ -342,6 +342,13 @@ export class Messaging {
         }
     }
 
+    /**
+     * @returns the underlaying socket client.
+     */
+    public getClient(): Client | undefined {
+        return this.socket;
+    }
+
     protected getNow(): number {
         return Date.now();
     }
