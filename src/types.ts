@@ -3,7 +3,15 @@ import EventEmitter from "eventemitter3";
 import {
     SocketFactoryConfig,
     SocketFactoryStats,
+    SocketFactoryInterface,
+    ClientInterface,
 } from "pocket-sockets";
+
+import {
+    Messaging,
+} from "./Messaging";
+
+import {EVENTS as SOCKETFACTORY_EVENTS} from "pocket-sockets";
 
 export const DEFAULT_PING_INTERVAL = 10000;  // Milliseconds.
 
@@ -57,8 +65,7 @@ export type Header = {
 };
 
 export type OutgoingQueue = {
-    unencrypted: Buffer[],
-    encrypted: Buffer[]
+    chunks: Buffer[],
 };
 
 export type InMessage = {
@@ -75,8 +82,7 @@ export type InMessage = {
 };
 
 export type IncomingQueue = {
-    encrypted: Buffer[],
-    decrypted: Buffer[],
+    chunks: Buffer[],
     messages: InMessage[]
 };
 
@@ -217,3 +223,44 @@ export type HandshakeFactoryConfig = {
      */
     pingInterval?: number,
 };
+
+/**
+ * Extend EVENTS from SocketFactory.
+ * Add event HANDSHAKE_ERROR with the callback signature HandshakeErrorCallback.
+ * Add "HANDSHAKE_ERROR" to ERROR.subEvents.
+ */
+export const EVENTS = {
+    ...SOCKETFACTORY_EVENTS,
+    ERROR: {
+        ...SOCKETFACTORY_EVENTS.ERROR,
+        subEvents: [...SOCKETFACTORY_EVENTS.ERROR.subEvents, "HANDSHAKE_ERROR"],
+    },
+    HANDSHAKE: {
+        name: "HANDSHAKE",
+    },
+    HANDSHAKE_ERROR: {
+        name: "HANDSHAKE_ERROR",
+    },
+    CLIENT_REFUSE: {
+        ...SOCKETFACTORY_EVENTS.CLIENT_REFUSE,
+        reason: {
+            ...SOCKETFACTORY_EVENTS.CLIENT_REFUSE.reason,
+            PUBLICKEY_OVERFLOW: "PUBLICKEY_OVERFLOW",
+        }
+    },
+};
+
+/**
+ * Event emitted when client is successfully handshaked and setup for encryption.
+ * Note that the returned Messaging object first needs to be .open()'d to be ready for communication.
+ */
+export type HandshakeCallback = (e: {messaging: Messaging, isServer: boolean, handshakeResult: HandshakeResult}) => void;
+
+/** Event emitted when client could not handshake. */
+export type HandshakeErrorCallback = (e: {error: Error, client: ClientInterface}) => void;
+
+export interface HandshakeFactoryInterface extends SocketFactoryInterface {
+    getHandshakeFactoryConfig(): HandshakeFactoryConfig;
+    onHandshakeError(callback: HandshakeErrorCallback): void;
+    onHandshake(callback: HandshakeCallback): void;
+}

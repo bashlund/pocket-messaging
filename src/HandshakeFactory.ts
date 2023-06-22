@@ -1,15 +1,15 @@
 import {
     SocketFactory,
-    Client,
     ConnectCallback,
-    ClientRefuseCallback,
 } from "pocket-sockets";
-
-import {EVENTS as SOCKETFACTORY_EVENTS} from "pocket-sockets";
 
 import {
     HandshakeFactoryConfig,
     HandshakeResult,
+    HandshakeFactoryInterface,
+    EVENTS,
+    HandshakeCallback,
+    HandshakeErrorCallback,
 } from "./types";
 
 import {
@@ -21,46 +21,15 @@ import {
     HandshakeAsClient,
 } from "./Handshake";
 
-/**
- * Extend EVENTS from SocketFactory.
- * Add event HANDSHAKE_ERROR with the callback signature HandshakeErrorCallback.
- * Add "HANDSHAKE_ERROR" to ERROR.subEvents.
- */
-export const EVENTS = {
-    ...SOCKETFACTORY_EVENTS,
-    ERROR: {
-        ...SOCKETFACTORY_EVENTS.ERROR,
-        subEvents: [...SOCKETFACTORY_EVENTS.ERROR.subEvents, "HANDSHAKE_ERROR"],
-    },
-    HANDSHAKE: {
-        name: "HANDSHAKE",
-    },
-    HANDSHAKE_ERROR: {
-        name: "HANDSHAKE_ERROR",
-    },
-    CLIENT_REFUSE: {
-        ...SOCKETFACTORY_EVENTS.CLIENT_REFUSE,
-        reason: {
-            ...SOCKETFACTORY_EVENTS.CLIENT_REFUSE.reason,
-            PUBLICKEY_OVERFLOW: "PUBLICKEY_OVERFLOW",
-        }
-    },
-};
-
-/**
- * Event emitted when client is successfully handshaked and setup for encryption.
- * Note that the returned Messaging object first needs to be .open()'d to be ready for communication.
- */
-export type HandshakeCallback = (e: {messaging: Messaging, isServer: boolean, handshakeResult: HandshakeResult}) => void;
-
-/** Event emitted when client could not handshake. */
-export type HandshakeErrorCallback = (e: {error: Error, client: Client}) => void;
+import {
+    EncryptedClient,
+} from "./EncryptedClient";
 
 /**
  * This class extends the SocketFactory with handshake capabilties.
  * The SocketFactory EVENTS objects is redeclared here and extended.
  */
-export class HandshakeFactory extends SocketFactory {
+export class HandshakeFactory extends SocketFactory implements HandshakeFactoryInterface {
     protected handshakeFactoryConfig: HandshakeFactoryConfig;
 
     constructor(handshakeFactoryConfig: HandshakeFactoryConfig) {
@@ -92,30 +61,54 @@ export class HandshakeFactory extends SocketFactory {
 
     protected handleOnConnect: ConnectCallback = async (e) => {
         try {
-            const messaging = new Messaging(e.client, this.handshakeFactoryConfig.pingInterval);
             let handshakeResult: HandshakeResult;
+
             let peerData: Buffer | undefined;
+
             if (typeof this.handshakeFactoryConfig.peerData === "function") {
                 peerData = this.handshakeFactoryConfig.peerData(e.isServer);
             }
             else {
                 peerData = this.handshakeFactoryConfig.peerData;
             }
+
+            let encryptedClient: EncryptedClient | undefined;
+
             if (e.isServer) {
                 handshakeResult = await HandshakeAsServer(e.client, this.handshakeFactoryConfig.keyPair.secretKey, this.handshakeFactoryConfig.keyPair.publicKey, this.handshakeFactoryConfig.discriminator, this.handshakeFactoryConfig.allowedClients, peerData);
-                await messaging.setEncrypted(handshakeResult.serverToClientKey, handshakeResult.serverNonce, handshakeResult.clientToServerKey, handshakeResult.clientNonce, handshakeResult.peerLongtermPk);
+
+                encryptedClient = new EncryptedClient(e.client,
+                    handshakeResult.serverToClientKey,
+                    handshakeResult.serverNonce,
+                    handshakeResult.clientToServerKey,
+                    handshakeResult.clientNonce,
+                    handshakeResult.peerLongtermPk);
+
+                await encryptedClient.init();
             }
             else {
                 if (!this.handshakeFactoryConfig.serverPublicKey) {
                     e.client.close();
                     return;
                 }
+
                 handshakeResult = await HandshakeAsClient(e.client, this.handshakeFactoryConfig.keyPair.secretKey, this.handshakeFactoryConfig.keyPair.publicKey, this.handshakeFactoryConfig.serverPublicKey, this.handshakeFactoryConfig.discriminator, peerData);
-                await messaging.setEncrypted(handshakeResult.clientToServerKey, handshakeResult.clientNonce, handshakeResult.serverToClientKey, handshakeResult.serverNonce, handshakeResult.peerLongtermPk);
+
+                encryptedClient = new EncryptedClient(e.client,
+                    handshakeResult.clientToServerKey,
+                    handshakeResult.clientNonce,
+                    handshakeResult.serverToClientKey,
+                    handshakeResult.serverNonce,
+                    handshakeResult.peerLongtermPk);
+
+                await encryptedClient.init();
             }
-            if (!handshakeResult) {
+
+            if (!handshakeResult || !encryptedClient) {
                 return;
             }
+
+            const messaging = new Messaging(encryptedClient, this.handshakeFactoryConfig.pingInterval);
 
             const publicKeyStr = handshakeResult.peerLongtermPk.toString("hex");
             if (this.checkClientsOverflow(publicKeyStr)) {
