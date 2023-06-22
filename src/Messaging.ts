@@ -1,4 +1,4 @@
-import {Client} from "pocket-sockets";
+import {ClientInterface} from "pocket-sockets";
 import EventEmitter from "eventemitter3";
 import {box, unbox, init} from "./Crypto";
 import crypto from "crypto";  // Only used for synchronous randomBytes.
@@ -55,7 +55,7 @@ export class Messaging {
     /**
      * The given client socket to communicate with.
      */
-    protected socket: Client;
+    protected socket: ClientInterface;
 
     /**
      * Set to true if we have opened.
@@ -99,7 +99,7 @@ export class Messaging {
      * @param the underlying socket to use.
      * @param pingInterval in milliseconds, set to send frequent pings on the socket to detect silent disconnects.
      */
-    constructor(socket: Client, pingInterval?: number) {
+    constructor(socket: ClientInterface, pingInterval?: number) {
         this.socket = socket;
         this.pendingReply = {};
         this.isOpened = false;

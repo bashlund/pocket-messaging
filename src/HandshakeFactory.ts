@@ -196,11 +196,11 @@ export class HandshakeFactory extends SocketFactory {
         return false;
     }
 
-    onHandshakeError(callback: HandshakeErrorCallback) {
+    public onHandshakeError(callback: HandshakeErrorCallback) {
         this.hookEvent(EVENTS.HANDSHAKE_ERROR.name, callback);
     }
 
-    onHandshake(callback: HandshakeCallback) {
+    public onHandshake(callback: HandshakeCallback) {
         this.hookEvent(EVENTS.HANDSHAKE.name, callback);
     }
 }

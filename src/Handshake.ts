@@ -5,7 +5,7 @@
  */
 
 import sodium from "libsodium-wrappers";
-import {Client, ByteSize} from "pocket-sockets";
+import {ClientInterface, ByteSize} from "pocket-sockets";
 
 import {
     HandshakeResult,
@@ -432,7 +432,7 @@ function VerifyNonce(difficulty: number, serverEphemeralPk: Buffer, nonce: Buffe
  * @return Promise <HandshakeResult>
  * @throws
  */
-export async function HandshakeAsClient(client: Client, clientLongtermSk: Buffer, clientLongtermPk: Buffer, serverLongtermPk: Buffer, discriminator: Buffer, clientData?: Buffer, maxServerDataSize: number = 1024): Promise<HandshakeResult> {
+export async function HandshakeAsClient(client: ClientInterface, clientLongtermSk: Buffer, clientLongtermPk: Buffer, serverLongtermPk: Buffer, discriminator: Buffer, clientData?: Buffer, maxServerDataSize: number = 1024): Promise<HandshakeResult> {
     return new Promise( async (resolve, reject) => {
         try {
             await sodium.ready;
@@ -509,7 +509,7 @@ export async function HandshakeAsClient(client: Client, clientLongtermSk: Buffer
  * @return Promise<HandshakeResult>
  * @throws
  */
-export async function HandshakeAsServer(client: Client, serverLongtermSk: Buffer, serverLongtermPk: Buffer, discriminator: Buffer, allowedClientKey?: Function | Buffer[], serverData?: Buffer, difficulty: number = 0, maxClientDataSize: number = 1024): Promise<HandshakeResult> {
+export async function HandshakeAsServer(client: ClientInterface, serverLongtermSk: Buffer, serverLongtermPk: Buffer, discriminator: Buffer, allowedClientKey?: Function | Buffer[], serverData?: Buffer, difficulty: number = 0, maxClientDataSize: number = 1024): Promise<HandshakeResult> {
     return new Promise( async (resolve, reject) => {
         try {
             if (difficulty > 8) {
