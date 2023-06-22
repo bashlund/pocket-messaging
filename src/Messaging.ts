@@ -1,6 +1,5 @@
 import {ClientInterface} from "pocket-sockets";
 import EventEmitter from "eventemitter3";
-import {box, unbox, init} from "./Crypto";
 import crypto from "crypto";  // Only used for synchronous randomBytes.
 
 import {
@@ -74,17 +73,6 @@ export class Messaging {
     protected pingInterval: number;
 
     /**
-     * Setting this activates encryption.
-     */
-    protected encryptionKeys?: {
-        outgoingKey: Buffer,    // Used for box encryption
-        outgoingNonce: Buffer,  // Used for box encryption
-        incomingKey: Buffer,    // Used for box decryption
-        incomingNonce: Buffer,  // Used for box decryption
-        peerPublicKey: Buffer   // Peer long term public key, only kept for convenience.
-    };
-
-    /**
      * How many messages we allow through.
      * 0 means cork it up
      * -1 means unlimited.
@@ -110,49 +98,19 @@ export class Messaging {
         this.isBusyIn = 0;
         this.instanceId = Buffer.from(crypto.randomBytes(8)).toString("hex");
         this.incomingQueue = {
-            encrypted: [],
-            decrypted: [],
+            chunks: [],
             messages: []
         };
         this.outgoingQueue = {
-            unencrypted: [],
-            encrypted: []
+            chunks: [],
         };
         this.eventEmitter = new EventEmitter();
         this.socket.onError(this.socketError);
         this.socket.onClose(this.socketClose);
-
-        if (this.pingInterval > 0) {
-            this.enablePing(this.pingInterval);
-        }
     }
 
     public getInstanceId(): string {
         return this.instanceId;
-    }
-
-    /**
-     * Pass in the params returned from a successful handshake.
-     *
-     * @param peerPublicKey our peer's long term public key, only stored for convenience, is not used in encryption.
-     */
-    public async setEncrypted(outgoingKey: Buffer, outgoingNonce: Buffer, incomingKey: Buffer, incomingNonce: Buffer, peerPublicKey: Buffer) {
-        await init();  // init sodium
-        this.encryptionKeys = {
-            outgoingKey,
-            outgoingNonce,
-            incomingKey,
-            incomingNonce,
-            peerPublicKey,
-        };
-    }
-
-    public getPeerPublicKey(): Buffer | undefined {
-        return this.encryptionKeys?.peerPublicKey || undefined;
-    }
-
-    public setUnencrypted() {
-        this.encryptionKeys = undefined;
     }
 
     /**
@@ -202,9 +160,16 @@ export class Messaging {
         if (this.isOpened || this.isClosed) {
             return;
         }
+
         this.isOpened = true;
+
         this.socket.onData(this.socketData);
+
         this.checkTimeouts();
+
+        if (this.pingInterval > 0) {
+            this.enablePing(this.pingInterval);
+        }
     }
 
     public isOpen(): boolean {
@@ -256,11 +221,13 @@ export class Messaging {
      *     eventEmitter property is set if expecting reply
      */
     public send(target: Buffer | string, data?: Buffer, timeout: number = -1, stream: boolean = false, timeoutStream: number = 0): SendReturn | undefined {
-        if (!this.isOpened) {
-            return undefined;
-        }
+        //if (!this.isOpened) {
+            //console.debug("Messaging is not opened, cannot send");
+            //return undefined;
+        //}
 
         if (this.isClosed) {
+            console.debug("Messaging is closed, cannot send");
             return undefined;
         }
 
@@ -290,8 +257,8 @@ export class Messaging {
             config: expectingReply
         };
         const headerBuffer = this.encodeHeader(header);
-        this.outgoingQueue.unencrypted.push(headerBuffer);
-        this.outgoingQueue.unencrypted.push(data);
+        this.outgoingQueue.chunks.push(headerBuffer);
+        this.outgoingQueue.chunks.push(data);
         this.isBusyOut++;
         setImmediate(this.processOutqueue);
 
@@ -345,7 +312,7 @@ export class Messaging {
     /**
      * @returns the underlaying socket client.
      */
-    public getClient(): Client | undefined {
+    public getClient(): ClientInterface | undefined {
         return this.socket;
     }
 
@@ -523,8 +490,10 @@ export class Messaging {
             return;
         }
 
-        // Send empty message with an un-routable target.
-        this.send(Buffer.from([0]));
+        if (this.isOpened) {
+            // Send empty message with an un-routable target.
+            this.send(Buffer.from([0]));
+        }
 
         if (this.pingInterval > 0) {
             this.pingTimeout = setTimeout( this.sendPing, this.pingInterval );
@@ -532,11 +501,10 @@ export class Messaging {
     }
 
     /**
-     * Buffer incoming raw data from the socket.
-     * Ping decryptIncoming so it can have a go on the new data.
+     * Buffer incoming raw data from the socket and process it.
      */
     protected socketData = (data: Buffer) => {
-        this.incomingQueue.encrypted.push(data);
+        this.incomingQueue.chunks.push(data);
         this.isBusyIn++;
         this.processInqueue();
     }
@@ -545,65 +513,17 @@ export class Messaging {
         if (this.isBusyIn <= 0) {
             return;
         }
+
         this.isBusyIn--;
 
-        await this.decryptIncoming();
         if (!this.assembleIncoming()) {
             // Bad stream, close.
             this.close();
             return;
         }
+
         this.dispatchIncoming();
         this.processInqueue();  // In case someone increased the isBusyIn counter
-    }
-
-    /**
-     * Decrypt buffers in the inqueue and move them to the dispatch queue.
-     */
-    protected decryptIncoming = async () => {
-        if (this.encryptionKeys) {
-            let chunk = Buffer.alloc(0);
-            while (this.incomingQueue.encrypted.length > 0) {
-                const b = this.incomingQueue.encrypted.shift();
-                if (b) {
-                    chunk = Buffer.concat([chunk, b]);
-                }
-                if (chunk.length === 0) {
-                    continue;
-                }
-
-                // TODO: this we should do in a separate thread
-                try {
-                    const ret = unbox(chunk, this.encryptionKeys.incomingNonce, this.encryptionKeys.incomingKey);
-                    if (!ret) {
-                        // Not enough data in chunk
-                        if (this.incomingQueue.encrypted.length === 0) {
-                            break;
-                        }
-                        continue;
-                    }
-                    const [decrypted, nextNonce, bytesConsumed] = ret;
-                    this.encryptionKeys.incomingNonce = nextNonce;
-                    this.incomingQueue.decrypted.push(decrypted);
-                    chunk = chunk.slice(bytesConsumed);
-                }
-                catch(e) {
-                    console.error("Error unboxing message. Closing socket.");
-                    this.close();
-                    return;
-                }
-            }
-            if (chunk.length > 0) {
-                // Data rest, put ut back to queue
-                this.incomingQueue.encrypted.unshift(chunk);
-            }
-        }
-        else {
-            // Just move the buffers to the next queue as they are
-            const buffers = this.incomingQueue.encrypted.slice();
-            this.incomingQueue.encrypted.length = 0;
-            this.incomingQueue.decrypted.push(...buffers);
-        }
     }
 
     /**
@@ -611,13 +531,13 @@ export class Messaging {
      *
      */
     protected assembleIncoming = (): boolean => {
-        while (this.incomingQueue.decrypted.length > 0) {
-            if (this.incomingQueue.decrypted[0].length < 5) {
+        while (this.incomingQueue.chunks.length > 0) {
+            if (this.incomingQueue.chunks[0].length < 5) {
                 // Not enough data ready, see if we can collapse
-                if (this.incomingQueue.decrypted.length > 1) {
-                    const buf = this.incomingQueue.decrypted.shift();
+                if (this.incomingQueue.chunks.length > 1) {
+                    const buf = this.incomingQueue.chunks.shift();
                     if (buf) {
-                        this.incomingQueue.decrypted[0] = Buffer.concat([buf, this.incomingQueue.decrypted[0]]);
+                        this.incomingQueue.chunks[0] = Buffer.concat([buf, this.incomingQueue.chunks[0]]);
                     }
                     continue;
                 }
@@ -625,16 +545,16 @@ export class Messaging {
             }
 
             // Check version byte
-            const version = this.incomingQueue.decrypted[0].readUInt8(0);
+            const version = this.incomingQueue.chunks[0].readUInt8(0);
             if (version !== 0) {
-                this.incomingQueue.decrypted.length = 0;
+                this.incomingQueue.chunks.length = 0;
                 console.error("Bad stream detected reading version byte.");
                 return false;
             }
 
-            const length = this.incomingQueue.decrypted[0].readUInt32LE(1);
+            const length = this.incomingQueue.chunks[0].readUInt32LE(1);
 
-            const buffer = this.extractBuffer(this.incomingQueue.decrypted, length);
+            const buffer = this.extractBuffer(this.incomingQueue.chunks, length);
             if (!buffer) {
                 // Not enough data ready
                 return true;
@@ -642,7 +562,7 @@ export class Messaging {
 
             const ret = this.decodeHeader(buffer);
             if (!ret) {
-                this.incomingQueue.decrypted.length = 0;
+                this.incomingQueue.chunks.length = 0;
                 console.error("Bad stream detected in header.");
                 return false;
             }
@@ -750,44 +670,18 @@ export class Messaging {
         }
     }
 
-    protected processOutqueue = async () => {
+    protected processOutqueue = () => {
         if (this.isBusyOut <= 0) {
             return;
         }
         this.isBusyOut--;
-        await this.encryptOutgoing();
         this.dispatchOutgoing();
         this.processOutqueue();  // In case isBusyOut counter got increased
     }
 
-    /**
-     * Encrypt and move buffer (or just move buffers if not using encryption) to the next out queue.
-     */
-    protected encryptOutgoing = async () => {
-        if (this.encryptionKeys) {
-            while (this.outgoingQueue.unencrypted.length > 0) {
-                const chunk = this.outgoingQueue.unencrypted.shift();
-                if (!chunk) {
-                    continue;
-                }
-                // TODO: here we should use another thread to do the heavy work.
-                const [encrypted, nextNonce] = box(chunk,
-                                                   this.encryptionKeys.outgoingNonce,
-                                                   this.encryptionKeys.outgoingKey);
-                this.encryptionKeys.outgoingNonce = nextNonce;
-                this.outgoingQueue.encrypted.push(encrypted);
-            }
-        }
-        else {
-            const buffers = this.outgoingQueue.unencrypted.slice();
-            this.outgoingQueue.unencrypted.length = 0;
-            this.outgoingQueue.encrypted.push(...buffers);
-        }
-    }
-
     protected dispatchOutgoing = () => {
-        const buffers = this.outgoingQueue.encrypted.slice();
-        this.outgoingQueue.encrypted.length = 0;
+        const buffers = this.outgoingQueue.chunks.slice();
+        this.outgoingQueue.chunks.length = 0;
         for (let index=0; index<buffers.length; index++) {
             this.socket.send(buffers[index]);
         }
