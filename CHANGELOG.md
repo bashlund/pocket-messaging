@@ -1,5 +1,11 @@
 # CHANGELOG: pocket-messaging
 
+## [3.0.0] - 20230628
+Narrow return type of Messaging.getClient().  
+Remove box encryption from Messaging (BREAKING).  
+Add EncryptedClient wrapper to handle box encryption.  
+Add ClientInterface and HandshakeFactoryInterface.  
+
 ## [2.1.0] - 20230208
 Add Messaging.getClient() to get access to the underlaying socket.  
 Update package lock file to reflect security advisory (for devDependencies).  
