@@ -39,8 +39,8 @@
   "dependencies": {
     "eventemitter3": "^4.0.7",
     "libsodium-wrappers": "^0.7.9",
-    "pocket-console": "^0.3.0",
-    "pocket-sockets": "2.0.0"
+    "pocket-console": "0.5.0",
+    "pocket-sockets": "2.0.1"
   },
   "devDependencies": {
     "@tsconfig/node12": "^1.0.7",
