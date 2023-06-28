@@ -5,7 +5,7 @@ import { TestSuite, Test, AfterAll, expect } from 'testyts';
 
 import EventEmitter from "eventemitter3";
 
-import {Messaging, once, Header, EventType, SentMessage, TimeoutEvent} from "../";
+import {Messaging, once, Header, EventType, SentMessage, TimeoutEvent, EncryptedClient} from "../";
 import {CreatePair, Client} from "pocket-sockets";
 
 const assert = require("assert");
@@ -187,19 +187,16 @@ export class MessagingConstructor {
 
         assert(!messaging.isOpened);
         assert(!messaging.isClosed);
-        assert(!messaging.encryptionKeys);
 
         assert(messaging.dispatchLimit == -1);
         assert(messaging.isBusyOut == 0);
         assert(messaging.isBusyIn == 0);
         assert(messaging.instanceId.length == (8 * 2));
 
-        assert(messaging.incomingQueue.encrypted.length == 0);
-        assert(messaging.incomingQueue.decrypted.length == 0);
+        assert(messaging.incomingQueue.chunks.length == 0);
         assert(messaging.incomingQueue.messages.length == 0);
 
-        assert(messaging.outgoingQueue.unencrypted.length == 0);
-        assert(messaging.outgoingQueue.encrypted.length == 0);
+        assert(messaging.outgoingQueue.chunks.length == 0);
 
         assert(messaging.eventEmitter);
     }
@@ -212,16 +209,14 @@ export class MessagingSetEncrypted {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(async function() {
-            assert(!messaging.getPeerPublicKey());
-            assert(!messaging.encryptionKeys);
             const outKey = Buffer.alloc(32);
             const outNonce = Buffer.alloc(24);
             const inKey = Buffer.alloc(32);
             const inNonce = Buffer.alloc(24);
             const peerPubKey = Buffer.alloc(32);
-            await messaging.setEncrypted(outKey, outNonce, inKey, inNonce, peerPubKey);
-            assert(messaging.getPeerPublicKey());
-            assert(messaging.encryptionKeys);
+            let encryptedClient = new EncryptedClient(messaging.getClient(), outKey, outNonce, inKey, inNonce, peerPubKey);
+            await encryptedClient.init();
+            assert(encryptedClient.getPeerPublicKey());
         });
     }
 }
@@ -238,10 +233,8 @@ export class MessagingSetUnencrypted {
             const inKey = Buffer.alloc(32);
             const inNonce = Buffer.alloc(24);
             const peerPubKey = Buffer.alloc(32);
-            await messaging.setEncrypted(outKey, outNonce, inKey, inNonce, peerPubKey);
-            assert(messaging.encryptionKeys);
-            messaging.setUnencrypted();
-            assert(!messaging.encryptionKeys);
+            let encryptedClient = new EncryptedClient(messaging.getClient(), outKey, outNonce, inKey, inNonce, peerPubKey);
+            await encryptedClient.init();
         });
     }
 }
@@ -404,12 +397,12 @@ export class MessagingSend {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(function() {
-            assert(messaging.outgoingQueue.unencrypted.length == 0);
+            assert(messaging.outgoingQueue.chunks.length == 0);
             assert(Object.keys(messaging.pendingReply).length == 0);
             messaging.isOpened = true;
             messaging.isClosed = false;
             const replyStatus = messaging.send(Buffer.alloc(255).fill(255));
-            assert(messaging.outgoingQueue.unencrypted.length == 1 + 1);
+            assert(messaging.outgoingQueue.chunks.length == 1 + 1);
             assert(Object.keys(messaging.pendingReply).length == 0);
             assert(replyStatus !== undefined);
             assert(replyStatus && replyStatus.msgId !== undefined);
@@ -421,12 +414,12 @@ export class MessagingSend {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(function() {
-            assert(messaging.outgoingQueue.unencrypted.length == 0);
+            assert(messaging.outgoingQueue.chunks.length == 0);
             assert(Object.keys(messaging.pendingReply).length == 0);
             messaging.isOpened = true;
             messaging.isClosed = false;
             const replyStatus = messaging.send(Buffer.alloc(255).fill(255), undefined, 1);
-            assert(messaging.outgoingQueue.unencrypted.length == 1 + 1);
+            assert(messaging.outgoingQueue.chunks.length == 1 + 1);
             assert(Object.keys(messaging.pendingReply).length == 1);
             assert(replyStatus?.eventEmitter instanceof EventEmitter);
         });
@@ -565,12 +558,12 @@ export class MessagingSocketData {
             messaging.processInqueue = function() {
                 flag = true;
             }
-            assert(messaging.incomingQueue.encrypted.length == 0);
+            assert(messaging.incomingQueue.chunks.length == 0);
             assert(messaging.isBusyIn == 0);
             assert(flag == false);
             //@ts-ignore protected function
             messaging.socketData(Buffer.from(""));
-            assert(messaging.incomingQueue.encrypted.length == 1);
+            assert(messaging.incomingQueue.chunks.length == 1);
             assert(messaging.isBusyIn == 1);
             //@ts-ignore: expected to be changed by custom processInqueue
             assert(flag == true);
@@ -587,10 +580,6 @@ export class MessagingProcessInqueue {
         assert.doesNotThrow(function() {
 
             let flag = false;
-            //@ts-ignore custom signature
-            messaging.decryptIncoming = function() {
-                flag = true;
-            }
             assert(flag == false);
             messaging.isBusyIn = 0;
             //@ts-ignore protected function
@@ -608,10 +597,6 @@ export class MessagingProcessInqueue {
 
             let counter = 0;
             //@ts-ignore custom signature
-            messaging.decryptIncoming = function() {
-                counter++;
-            }
-            //@ts-ignore custom signature
             messaging.assembleIncoming = function() {
                 counter++;
             }
@@ -622,54 +607,7 @@ export class MessagingProcessInqueue {
             messaging.isBusyIn = 1;
             //@ts-ignore protected function
             await messaging.processInqueue();
-            assert(counter == 2);
-        });
-    }
-}
-
-@TestSuite()
-export class MessagingDecryptIncoming {
-    @Test()
-    public unencrypted() {
-        let [socket, _] = CreatePair();
-        let messaging = new Messaging(socket, 0);
-        assert.doesNotThrow(async function() {
-
-            messaging.incomingQueue.encrypted.push(Buffer.from(""));
-
-            assert(messaging.incomingQueue.encrypted.length == 1);
-            assert(messaging.incomingQueue.decrypted.length == 0);
-            //@ts-ignore protected function
-            messaging.decryptIncoming();
-            assert(messaging.incomingQueue.encrypted.length == 0);
-            assert(messaging.incomingQueue.decrypted.length == 1);
-        });
-    }
-
-    @Test()
-    public encrypted_data_not_ready() {
-        let [socket, _] = CreatePair();
-        let messaging = new Messaging(socket, 0);
-        assert.doesNotThrow(async function() {
-            const keyPair = {
-                publicKey: Buffer.from(""),
-                secretKey: Buffer.from("")
-            };
-
-            const outKey = Buffer.alloc(32);
-            const outNonce = Buffer.alloc(24);
-            const inKey = Buffer.alloc(32);
-            const inNonce = Buffer.alloc(24);
-            const peerPubKey = Buffer.alloc(32);
-            await messaging.setEncrypted(outKey, outNonce, inKey, inNonce, peerPubKey);
-            messaging.incomingQueue.encrypted.push(Buffer.from("aaa"));
-
-            assert(messaging.incomingQueue.encrypted.length == 1);
-            assert(messaging.incomingQueue.decrypted.length == 0);
-            //@ts-ignore protected function
-            messaging.decryptIncoming();
-            assert(messaging.incomingQueue.encrypted.length == 1);
-            assert(messaging.incomingQueue.decrypted.length == 0);
+            assert(counter == 1);
         });
     }
 }
@@ -682,10 +620,9 @@ export class MessagingAssembleIncoming {
         let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(async function() {
 
-            messaging.incomingQueue.encrypted.push(Buffer.from(""));
+            messaging.incomingQueue.chunks.push(Buffer.from(""));
 
-            assert(messaging.incomingQueue.encrypted.length == 1);
-            assert(messaging.incomingQueue.decrypted.length == 0);
+            assert(messaging.incomingQueue.chunks.length == 1);
             //@ts-ignore protected function
             messaging.assembleIncoming();
         });
@@ -697,9 +634,7 @@ export class MessagingAssembleIncoming {
         let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(async function() {
 
-            messaging.incomingQueue.encrypted.push(Buffer.from("1234"));
-            //@ts-ignore protected function
-            messaging.decryptIncoming();
+            messaging.incomingQueue.chunks.push(Buffer.from("1234"));
             //@ts-ignore protected function
             messaging.assembleIncoming();
         });
@@ -711,12 +646,10 @@ export class MessagingAssembleIncoming {
         let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(async function() {
 
-            messaging.incomingQueue.encrypted.push(Buffer.from("12345"));
-            //@ts-ignore protected function
-            messaging.decryptIncoming();
+            messaging.incomingQueue.chunks.push(Buffer.from("12345"));
 
             // Set custom version
-            messaging.incomingQueue.decrypted[0].writeUInt8(244);
+            messaging.incomingQueue.chunks[0].writeUInt8(244);
 
             //@ts-ignore protected function
             messaging.assembleIncoming();
@@ -729,10 +662,8 @@ export class MessagingAssembleIncoming {
         let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(async function() {
 
-            messaging.incomingQueue.encrypted.push(Buffer.from("12345"));
-            //@ts-ignore protected function
-            messaging.decryptIncoming();
-            messaging.incomingQueue.decrypted[0].writeUInt8(0);
+            messaging.incomingQueue.chunks.push(Buffer.from("12345"));
+            messaging.incomingQueue.chunks[0].writeUInt8(0);
 
             //@ts-ignore protected function
             messaging.extractBuffer = function() {
@@ -750,10 +681,8 @@ export class MessagingAssembleIncoming {
         let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(async function() {
 
-            messaging.incomingQueue.encrypted.push(Buffer.from("12345"));
-            //@ts-ignore protected function
-            messaging.decryptIncoming();
-            messaging.incomingQueue.decrypted[0].writeUInt8(0);
+            messaging.incomingQueue.chunks.push(Buffer.from("12345"));
+            messaging.incomingQueue.chunks[0].writeUInt8(0);
 
             //@ts-ignore protected function
             messaging.extractBuffer = function() {
@@ -775,10 +704,8 @@ export class MessagingAssembleIncoming {
         let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(async function() {
 
-            messaging.incomingQueue.encrypted.push(Buffer.from("12345"));
-            //@ts-ignore protected function
-            messaging.decryptIncoming();
-            messaging.incomingQueue.decrypted[0].writeUInt8(0);
+            messaging.incomingQueue.chunks.push(Buffer.from("12345"));
+            messaging.incomingQueue.chunks[0].writeUInt8(0);
 
             //@ts-ignore protected function
             messaging.extractBuffer = function() {
@@ -786,7 +713,7 @@ export class MessagingAssembleIncoming {
             }
             //@ts-ignore protected function
             messaging.decodeHeader = function() {
-                messaging.incomingQueue.decrypted.length = 0;
+                messaging.incomingQueue.chunks.length = 0;
                 return [{version: 0, target: "tgt", dataLength: 3, config: false}, Buffer.from("")];
             }
 
@@ -806,7 +733,7 @@ export class MessagingDispatchIncoming {
         let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(async function() {
 
-            messaging.incomingQueue.encrypted.push(Buffer.from(""));
+            messaging.incomingQueue.chunks.push(Buffer.from(""));
 
             assert(messaging.incomingQueue.messages.length == 0);
             //@ts-ignore protected function
@@ -821,10 +748,8 @@ export class MessagingDispatchIncoming {
         let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(async function() {
 
-            messaging.incomingQueue.encrypted.push(Buffer.from("12345"));
-            //@ts-ignore protected function
-            messaging.decryptIncoming();
-            messaging.incomingQueue.decrypted[0].writeUInt8(0);
+            messaging.incomingQueue.chunks.push(Buffer.from("12345"));
+            messaging.incomingQueue.chunks[0].writeUInt8(0);
 
             //@ts-ignore protected function
             messaging.extractBuffer = function() {
@@ -832,7 +757,7 @@ export class MessagingDispatchIncoming {
             }
             //@ts-ignore protected function
             messaging.decodeHeader = function() {
-                messaging.incomingQueue.decrypted.length = 0;
+                messaging.incomingQueue.chunks.length = 0;
                 return [{version: 0, target: Buffer.from("tgt"), dataLength: 3, config: false}, Buffer.from("")];
             }
 
@@ -852,10 +777,8 @@ export class MessagingDispatchIncoming {
         let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(async function() {
 
-            messaging.incomingQueue.encrypted.push(Buffer.from("12345"));
-            //@ts-ignore protected function
-            messaging.decryptIncoming();
-            messaging.incomingQueue.decrypted[0].writeUInt8(0);
+            messaging.incomingQueue.chunks.push(Buffer.from("12345"));
+            messaging.incomingQueue.chunks[0].writeUInt8(0);
 
             //@ts-ignore protected function
             messaging.extractBuffer = function() {
@@ -863,7 +786,7 @@ export class MessagingDispatchIncoming {
             }
             //@ts-ignore protected function
             messaging.decodeHeader = function() {
-                messaging.incomingQueue.decrypted.length = 0;
+                messaging.incomingQueue.chunks.length = 0;
                 return [{version: 0, target: Buffer.from("tgt"), dataLength: 3, config: false}, Buffer.from("")];
             }
 
@@ -883,10 +806,8 @@ export class MessagingDispatchIncoming {
         let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(async function() {
 
-            messaging.incomingQueue.encrypted.push(Buffer.from("12345"));
-            //@ts-ignore protected function
-            messaging.decryptIncoming();
-            messaging.incomingQueue.decrypted[0].writeUInt8(0);
+            messaging.incomingQueue.chunks.push(Buffer.from("12345"));
+            messaging.incomingQueue.chunks[0].writeUInt8(0);
 
             //@ts-ignore protected function
             messaging.extractBuffer = function() {
@@ -894,7 +815,7 @@ export class MessagingDispatchIncoming {
             }
             //@ts-ignore protected function
             messaging.decodeHeader = function() {
-                messaging.incomingQueue.decrypted.length = 0;
+                messaging.incomingQueue.chunks.length = 0;
                 return [{version: 0, target: Buffer.from("tgt"), dataLength: 3, config: false}, Buffer.from("")];
             }
 
@@ -920,10 +841,6 @@ export class MessagingProcessOutqueue {
 
             let counter = 0;
             //@ts-ignore protected function
-            messaging.encryptOutgoing = function() {
-                counter++;
-            }
-            //@ts-ignore protected function
             messaging.dispatchOutgoing = function() {
                 counter++;
             }
@@ -944,18 +861,11 @@ export class MessagingProcessOutqueue {
             let encryptFlag = false;
             let dispatchFlag = false;
             //@ts-ignore protected function
-            messaging.encryptOutgoing = async function() {
-                encryptFlag = true;
-                return Promise.resolve(true);
-            }
-            //@ts-ignore protected function
             messaging.dispatchOutgoing = function() {
                 dispatchFlag = true;
             }
             //@ts-ignore protected function
             await messaging.processOutqueue();
-            //@ts-ignore expected to be set by custom function
-            assert(encryptFlag == true);
             //@ts-ignore expected to be set by custom function
             assert(dispatchFlag == true);
         });
@@ -972,12 +882,7 @@ export class MessagingEncryptOutgoing {
             messaging.isOpened = true;
             messaging.isClosed = false;
             const replyStatus = messaging.send(Buffer.alloc(255).fill(255));
-            assert(messaging.outgoingQueue.unencrypted.length == 1 + 1);
-            assert(messaging.outgoingQueue.encrypted.length == 0);
-            //@ts-ignore: protected function
-            await messaging.encryptOutgoing();
-            assert(messaging.outgoingQueue.unencrypted.length == 0);
-            assert(messaging.outgoingQueue.encrypted.length == 2);
+            assert(messaging.outgoingQueue.chunks.length == 1 + 1);
         });
     }
 
@@ -993,15 +898,11 @@ export class MessagingEncryptOutgoing {
             const inKey = Buffer.alloc(32);
             const inNonce = Buffer.alloc(24);
             const peerPubKey = Buffer.alloc(32);
-            await messaging.setEncrypted(outKey, outNonce, inKey, inNonce, peerPubKey);
-            const replyStatus = messaging.send(Buffer.alloc(255).fill(255));
-            assert(messaging.outgoingQueue.unencrypted.length == 1 + 1);
-            assert(messaging.outgoingQueue.encrypted.length == 0);
+            let encryptedClient = new EncryptedClient(messaging.getClient(), outKey, outNonce, inKey, inNonce, peerPubKey);
+            await encryptedClient.init();
 
-            //@ts-ignore: protected function
-            await messaging.encryptOutgoing();
-            assert(messaging.outgoingQueue.unencrypted.length == 0);
-            assert(messaging.outgoingQueue.encrypted.length == 2);
+            const replyStatus = messaging.send(Buffer.alloc(255).fill(255));
+            assert(messaging.outgoingQueue.chunks.length == 1 + 1);
         });
     }
 }
@@ -1013,10 +914,10 @@ export class MessagingDispatchOutgoing {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(async function() {
-            assert(messaging.outgoingQueue.encrypted.length == 0);
+            assert(messaging.outgoingQueue.chunks.length == 0);
             //@ts-ignore: protected function
             await messaging.dispatchOutgoing();
-            assert(messaging.outgoingQueue.encrypted.length == 0);
+            assert(messaging.outgoingQueue.chunks.length == 0);
         });
     }
 
@@ -1032,22 +933,22 @@ export class MessagingDispatchOutgoing {
             const inKey = Buffer.alloc(32);
             const inNonce = Buffer.alloc(24);
             const peerPubKey = Buffer.alloc(32);
-            await messaging.setEncrypted(outKey, outNonce, inKey, inNonce, peerPubKey);
+            let encryptedClient = new EncryptedClient(messaging.getClient(), outKey, outNonce, inKey, inNonce, peerPubKey);
+            await encryptedClient.init();
+
             const replyStatus = messaging.send(Buffer.alloc(255).fill(255));
-            //@ts-ignore: protected function
-            await messaging.encryptOutgoing();
 
             let flag = false;
             messaging.socket.send = function() {
                 flag = true;
             }
             assert(flag == false);
-            assert(messaging.outgoingQueue.encrypted.length == 2);
+            assert(messaging.outgoingQueue.chunks.length == 2);
             //@ts-ignore: protected function
             await messaging.dispatchOutgoing();
             //@ts-ignore: flag expected to be toggled by custom socket send procedure
             assert(flag == true);
-            assert(messaging.outgoingQueue.encrypted.length == 0);
+            assert(messaging.outgoingQueue.chunks.length == 0);
         });
     }
 }
