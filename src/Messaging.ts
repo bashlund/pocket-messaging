@@ -312,7 +312,7 @@ export class Messaging {
     /**
      * @returns the underlaying socket client.
      */
-    public getClient(): ClientInterface | undefined {
+    public getClient(): ClientInterface {
         return this.socket;
     }
 

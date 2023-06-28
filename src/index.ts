@@ -1,3 +1,4 @@
+export * from "./EncryptedClient";
 export * from "./Messaging";
 export * from "./Handshake";
 export * from "./HandshakeFactory";
