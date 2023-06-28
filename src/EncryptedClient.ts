@@ -141,6 +141,10 @@ export class EncryptedClient implements ClientInterface {
         return this.client.getLocalPort();
     }
 
+    public getClient(): ClientInterface {
+        return this.client;
+    }
+
     protected hookEvent(type: string, callback: Function) {
         const cbs = this.handlers[type] || [];
         this.handlers[type] = cbs;
