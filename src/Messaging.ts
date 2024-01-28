@@ -25,7 +25,7 @@ import {
     PocketConsole,
 } from "pocket-console";
 
-let console = PocketConsole({module: "Messaging"});
+const console = PocketConsole({module: "Messaging"});
 
 export class Messaging {
 
@@ -443,9 +443,11 @@ export class Messaging {
 
     protected getAllEventEmitters(): EventEmitter[] {
         const eventEmitters: EventEmitter[] = [];
-        for (let msgId in this.pendingReply) {
+
+        Object.keys(this.pendingReply).forEach( msgId => {
             eventEmitters.push(this.pendingReply[msgId].eventEmitter);
-        }
+        });
+
         eventEmitters.push(this.eventEmitter);
         return eventEmitters;
     }
@@ -741,10 +743,11 @@ export class Messaging {
     protected getTimeoutedPendingMessages(): SentMessage[] {
         const timeouted: SentMessage[] = [];
         const now = this.getNow();
-        for (let msgId in this.pendingReply) {
+
+        Object.keys(this.pendingReply).forEach( msgId => {
             const sentMessage = this.pendingReply[msgId];
             if (sentMessage.isCleared) {
-                continue;
+                return;
             }
             if (sentMessage.replyCounter === 0) {
                 if (sentMessage.timeout > 0 && now > sentMessage.timestamp + sentMessage.timeout) {
@@ -756,7 +759,8 @@ export class Messaging {
                     timeouted.push(sentMessage);
                 }
             }
-        }
+        });
+
         return timeouted;
     }
 }

@@ -40,7 +40,7 @@ export enum ExpectingReply {
     NONE = 0,
     SINGLE = 1,
     MULTIPLE = 2,
-};
+}
 
 /**
  * Bytes:
@@ -100,8 +100,7 @@ export type ReplyEvent = {
     expectingReply: number
 };
 
-export type TimeoutEvent = {
-};
+export type TimeoutEvent = Record<string, never>;  // Fancy speak for empty object.
 
 export type ErrorEvent = {
     error: string,

@@ -432,73 +432,74 @@ function VerifyNonce(difficulty: number, serverEphemeralPk: Buffer, nonce: Buffe
  * @return Promise <HandshakeResult>
  * @throws
  */
-export async function HandshakeAsClient(client: ClientInterface, clientLongtermSk: Buffer, clientLongtermPk: Buffer, serverLongtermPk: Buffer, discriminator: Buffer, clientData?: Buffer, maxServerDataSize: number = 1024): Promise<HandshakeResult> {
-    return new Promise( async (resolve, reject) => {
-        try {
-            await sodium.ready;
+export async function HandshakeAsClient(
+    client: ClientInterface,
+    clientLongtermSk: Buffer,
+    clientLongtermPk: Buffer,
+    serverLongtermPk: Buffer,
+    discriminator: Buffer,
+    clientData?: Buffer,
+    maxServerDataSize: number = 1024): Promise<HandshakeResult> {
 
-            // Make sure the discriminator is constant length
-            discriminator = hashFn(discriminator);
+    await sodium.ready;
 
-            const clientEphemeralKeys = createEphemeralKeys();
-            const clientEphemeralPk = clientEphemeralKeys.publicKey;
-            const clientEphemeralSk = clientEphemeralKeys.secretKey;
+    // Make sure the discriminator is constant length
+    discriminator = hashFn(discriminator);
 
-            // First message from client (message 1)
-            const msg1 = message1(clientEphemeralPk, discriminator);
-            client.send(msg1);
+    const clientEphemeralKeys = createEphemeralKeys();
+    const clientEphemeralPk = clientEphemeralKeys.publicKey;
+    const clientEphemeralSk = clientEphemeralKeys.secretKey;
 
-            // First response from server (message 2)
-            const msg2 = await new ByteSize(client).read(65);
-            const [difficulty, serverEphemeralPk] = verifyMessage2(msg2, discriminator);
+    // First message from client (message 1)
+    const msg1 = message1(clientEphemeralPk, discriminator);
+    client.send(msg1);
 
-            const nonce = CalculateNonce(difficulty.readUInt8(0), serverEphemeralPk);
+    // First response from server (message 2)
+    const msg2 = await new ByteSize(client).read(65);
+    const [difficulty, serverEphemeralPk] = verifyMessage2(msg2, discriminator);
 
-            const sharedSecret_ab = clientSharedSecret_ab(clientEphemeralSk, serverEphemeralPk);
-            const sharedSecret_aB = clientSharedSecret_aB(clientEphemeralSk, serverLongtermPk);
+    const nonce = CalculateNonce(difficulty.readUInt8(0), serverEphemeralPk);
 
-            // Second message from client (message 3)
-            const detachedSigA = signDetached(Buffer.concat([nonce, discriminator, serverLongtermPk, hashFn(sharedSecret_ab)]), clientLongtermSk);
+    const sharedSecret_ab = clientSharedSecret_ab(clientEphemeralSk, serverEphemeralPk);
+    const sharedSecret_aB = clientSharedSecret_aB(clientEphemeralSk, serverLongtermPk);
 
-            const msg3 = message3(detachedSigA, nonce, discriminator, clientLongtermPk, sharedSecret_ab, sharedSecret_aB, clientData);
-            client.send(msg3);
+    // Second message from client (message 3)
+    const detachedSigA = signDetached(Buffer.concat([nonce, discriminator, serverLongtermPk, hashFn(sharedSecret_ab)]), clientLongtermSk);
 
-            const sharedSecret_Ab = clientSharedSecret_Ab(clientLongtermSk, serverEphemeralPk);
+    const msg3 = message3(detachedSigA, nonce, discriminator, clientLongtermPk, sharedSecret_ab, sharedSecret_aB, clientData);
+    client.send(msg3);
 
-            // Wait for second response from server (message 4)
-            const lengthPrefix = await new ByteSize(client).read(2);
-            const length = lengthPrefix.readUInt16BE(0);
-            if (length - 64 > maxServerDataSize) {
-                throw new Error("Server data length too big");
-            }
+    const sharedSecret_Ab = clientSharedSecret_Ab(clientLongtermSk, serverEphemeralPk);
 
-            const msg4_ciphertext = await new ByteSize(client).read(length);
-            const msg4 = Buffer.concat([lengthPrefix, msg4_ciphertext]);
+    // Wait for second response from server (message 4)
+    const lengthPrefix = await new ByteSize(client).read(2);
+    const length = lengthPrefix.readUInt16BE(0);
+    if (length - 64 > maxServerDataSize) {
+        throw new Error("Server data length too big");
+    }
 
-            const serverData = verifyMessage4(msg4, detachedSigA, clientLongtermPk, serverLongtermPk, discriminator, sharedSecret_ab, sharedSecret_aB, sharedSecret_Ab);
+    const msg4_ciphertext = await new ByteSize(client).read(length);
+    const msg4 = Buffer.concat([lengthPrefix, msg4_ciphertext]);
 
-            const [clientToServerKey, clientNonce] = calcClientToServerKey(discriminator, sharedSecret_ab, sharedSecret_aB, sharedSecret_Ab, serverLongtermPk, serverEphemeralPk);
-            const [serverToClientKey, serverNonce] = calcServerToClientKey(discriminator, sharedSecret_ab, sharedSecret_aB, sharedSecret_Ab, clientLongtermPk, clientEphemeralPk);
+    const serverData = verifyMessage4(msg4, detachedSigA, clientLongtermPk, serverLongtermPk, discriminator, sharedSecret_ab, sharedSecret_aB, sharedSecret_Ab);
 
-            const sessionId = hashFn(sharedSecret_ab);
+    const [clientToServerKey, clientNonce] = calcClientToServerKey(discriminator, sharedSecret_ab, sharedSecret_aB, sharedSecret_Ab, serverLongtermPk, serverEphemeralPk);
+    const [serverToClientKey, serverNonce] = calcServerToClientKey(discriminator, sharedSecret_ab, sharedSecret_aB, sharedSecret_Ab, clientLongtermPk, clientEphemeralPk);
 
-            const handshakeParams = {
-                longtermPk: clientLongtermPk,
-                peerLongtermPk: serverLongtermPk,
-                clientToServerKey,
-                clientNonce,
-                serverToClientKey,
-                serverNonce,
-                peerData: serverData,
-                sessionId,
-            };
+    const sessionId = hashFn(sharedSecret_ab);
 
-            resolve(handshakeParams);
-        }
-        catch(e) {
-            reject(e);
-        }
-    });
+    const handshakeParams = {
+        longtermPk: clientLongtermPk,
+        peerLongtermPk: serverLongtermPk,
+        clientToServerKey,
+        clientNonce,
+        serverToClientKey,
+        serverNonce,
+        peerData: serverData,
+        sessionId,
+    };
+
+    return handshakeParams;
 }
 
 /**
@@ -509,97 +510,99 @@ export async function HandshakeAsClient(client: ClientInterface, clientLongtermS
  * @return Promise<HandshakeResult>
  * @throws
  */
-export async function HandshakeAsServer(client: ClientInterface, serverLongtermSk: Buffer, serverLongtermPk: Buffer, discriminator: Buffer, allowedClientKey?: Function | Buffer[], serverData?: Buffer, difficulty: number = 0, maxClientDataSize: number = 1024): Promise<HandshakeResult> {
-    return new Promise( async (resolve, reject) => {
-        try {
-            if (difficulty > 8) {
-                // We support 8 nibbles of nonce.
-                throw new Error("Too high difficulty requested, max 8");
+export async function HandshakeAsServer(
+    client: ClientInterface,
+    serverLongtermSk: Buffer,
+    serverLongtermPk: Buffer,
+    discriminator: Buffer,
+    allowedClientKey?: ((clientLongtermPk: Buffer) => boolean) | Buffer[],
+    serverData?: Buffer,
+    difficulty: number = 0,
+    maxClientDataSize: number = 1024): Promise<HandshakeResult> {
+
+    if (difficulty > 8) {
+        // We support 8 nibbles of nonce.
+        throw new Error("Too high difficulty requested, max 8");
+    }
+
+    await sodium.ready;
+
+    // Make sure the discriminator is constant length
+    discriminator = hashFn(discriminator);
+
+    const serverEphemeralKeys = createEphemeralKeys();
+    const serverEphemeralPk = serverEphemeralKeys.publicKey;
+    const serverEphemeralSk = serverEphemeralKeys.secretKey;
+
+    // Wait for first message from client (message 1)
+    const msg1 = await new ByteSize(client).read(65);
+    const clientEphemeralPk = verifyMessage1(msg1, discriminator);
+
+    // Send first message from server (message 2)
+    const msg2 = message2(Buffer.from([difficulty]), serverEphemeralPk, discriminator);
+    client.send(msg2);
+
+    const sharedSecret_ab = serverSharedSecret_ab(serverEphemeralSk, clientEphemeralPk);
+    const sharedSecret_aB = serverSharedSecret_aB(serverLongtermSk, clientEphemeralPk);
+
+    // Wait for second message from client (message 3)
+    const lengthPrefix = await new ByteSize(client).read(2, 3000 + difficulty * 30000);
+    const length = lengthPrefix.readUInt16BE(0);
+    if (length - 100 > maxClientDataSize) {
+        throw new Error("Client data length too big");
+    }
+
+    const msg3_ciphertext = await new ByteSize(client).read(length);
+    const msg3 = Buffer.concat([lengthPrefix, msg3_ciphertext]);
+
+    const [nonce, clientLongtermPk, detachedSigA, clientData] = verifyMessage3(msg3, serverLongtermPk, discriminator, sharedSecret_ab, sharedSecret_aB);
+
+    if (!VerifyNonce(difficulty, serverEphemeralPk, nonce)) {
+        throw new Error("Nonce does not verify");
+    }
+
+    // Verify permissioned handshake for client longterm pk
+    if (allowedClientKey) {
+        if (typeof(allowedClientKey) === "function") {
+            if (!allowedClientKey(clientLongtermPk)) {
+                throw new Error(`Client longterm pk (${clientLongtermPk.toString("hex")} not allowed by function, IP: ${client.getRemoteAddress()}`);
             }
-
-            await sodium.ready;
-
-            // Make sure the discriminator is constant length
-            discriminator = hashFn(discriminator);
-
-            const serverEphemeralKeys = createEphemeralKeys();
-            const serverEphemeralPk = serverEphemeralKeys.publicKey;
-            const serverEphemeralSk = serverEphemeralKeys.secretKey;
-
-            // Wait for first message from client (message 1)
-            const msg1 = await new ByteSize(client).read(65);
-            const clientEphemeralPk = verifyMessage1(msg1, discriminator);
-
-            // Send first message from server (message 2)
-            const msg2 = message2(Buffer.from([difficulty]), serverEphemeralPk, discriminator);
-            client.send(msg2);
-
-            const sharedSecret_ab = serverSharedSecret_ab(serverEphemeralSk, clientEphemeralPk);
-            const sharedSecret_aB = serverSharedSecret_aB(serverLongtermSk, clientEphemeralPk);
-
-            // Wait for second message from client (message 3)
-            const lengthPrefix = await new ByteSize(client).read(2, 3000 + difficulty * 30000);
-            const length = lengthPrefix.readUInt16BE(0);
-            if (length - 100 > maxClientDataSize) {
-                throw new Error("Client data length too big");
-            }
-
-            const msg3_ciphertext = await new ByteSize(client).read(length);
-            const msg3 = Buffer.concat([lengthPrefix, msg3_ciphertext]);
-
-            const [nonce, clientLongtermPk, detachedSigA, clientData] = verifyMessage3(msg3, serverLongtermPk, discriminator, sharedSecret_ab, sharedSecret_aB);
-
-            if (!VerifyNonce(difficulty, serverEphemeralPk, nonce)) {
-                throw new Error("Nonce does not verify");
-            }
-
-            // Verify permissioned handshake for client longterm pk
-            if (allowedClientKey) {
-                if (typeof(allowedClientKey) === "function") {
-                    if (!allowedClientKey(clientLongtermPk)) {
-                        throw new Error(`Client longterm pk (${clientLongtermPk.toString("hex")} not allowed by function, IP: ${client.getRemoteAddress()}`);
-                    }
-                }
-                else if (Array.isArray(allowedClientKey)) {
-                    if (!allowedClientKey.find( (pk) => Equals(pk, clientLongtermPk) )) {
-                        throw new Error(`Client longterm pk (${clientLongtermPk.toString("hex")}) not in list of allowed public keys, IP: ${client.getRemoteAddress()}`);
-                    }
-                }
-                else {
-                    throw new Error("Unknown client longterm pk validator");
-                }
-            }
-            else {
-                // WARNING: no allowedClientKey means to allow all clients connecting
-                // Fall through
-            }
-
-            const sharedSecret_Ab = serverSharedSecret_Ab(serverEphemeralSk, clientLongtermPk);
-
-            // Send second message from server (message 4)
-            const msg4 = message4(discriminator, detachedSigA, clientLongtermPk, sharedSecret_ab, sharedSecret_aB, sharedSecret_Ab, serverLongtermSk, serverData);
-            client.send(msg4);
-
-            const [clientToServerKey, clientNonce] = calcClientToServerKey(discriminator, sharedSecret_ab, sharedSecret_aB, sharedSecret_Ab, serverLongtermPk, serverEphemeralPk);
-            const [serverToClientKey, serverNonce] = calcServerToClientKey(discriminator, sharedSecret_ab, sharedSecret_aB, sharedSecret_Ab, clientLongtermPk, clientEphemeralPk);
-            const sessionId = hashFn(sharedSecret_ab);
-
-            const handshakeParams = {
-                longtermPk: serverLongtermPk,
-                peerLongtermPk: clientLongtermPk,
-                clientToServerKey,
-                clientNonce,
-                serverToClientKey,
-                serverNonce,
-                peerData: clientData,
-                sessionId,
-            };
-
-            // Done
-            resolve(handshakeParams);
         }
-        catch(e) {
-            reject(e);
+        else if (Array.isArray(allowedClientKey)) {
+            if (!allowedClientKey.find( (pk) => Equals(pk, clientLongtermPk) )) {
+                throw new Error(`Client longterm pk (${clientLongtermPk.toString("hex")}) not in list of allowed public keys, IP: ${client.getRemoteAddress()}`);
+            }
         }
-    });
+        else {
+            throw new Error("Unknown client longterm pk validator");
+        }
+    }
+    else {
+        // WARNING: no allowedClientKey means to allow all clients connecting
+        // Fall through
+    }
+
+    const sharedSecret_Ab = serverSharedSecret_Ab(serverEphemeralSk, clientLongtermPk);
+
+    // Send second message from server (message 4)
+    const msg4 = message4(discriminator, detachedSigA, clientLongtermPk, sharedSecret_ab, sharedSecret_aB, sharedSecret_Ab, serverLongtermSk, serverData);
+    client.send(msg4);
+
+    const [clientToServerKey, clientNonce] = calcClientToServerKey(discriminator, sharedSecret_ab, sharedSecret_aB, sharedSecret_Ab, serverLongtermPk, serverEphemeralPk);
+    const [serverToClientKey, serverNonce] = calcServerToClientKey(discriminator, sharedSecret_ab, sharedSecret_aB, sharedSecret_Ab, clientLongtermPk, clientEphemeralPk);
+    const sessionId = hashFn(sharedSecret_ab);
+
+    const handshakeParams = {
+        longtermPk: serverLongtermPk,
+        peerLongtermPk: clientLongtermPk,
+        clientToServerKey,
+        clientNonce,
+        serverToClientKey,
+        serverNonce,
+        peerData: clientData,
+        sessionId,
+    };
+
+    // Done
+    return handshakeParams;
 }

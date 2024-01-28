@@ -13,7 +13,7 @@ import {
  *
  */
 export class EncryptedClient implements ClientInterface {
-    protected handlers: {[name: string]: Function[]} = {};
+    protected handlers: {[name: string]: ((args?: any) => void)[]} = {};
     protected incomingData: Buffer;
 
     constructor(protected client: ClientInterface,
@@ -42,7 +42,7 @@ export class EncryptedClient implements ClientInterface {
         throw new Error("The EncryptedSocket's underlaying socket should already have been connected");
     }
 
-    public unRead(data: Buffer) {
+    public unRead(data: Buffer) {  //eslint-disable-line @typescript-eslint/no-unused-vars
         throw new Error("unRead function not available in EncryptedSocket");
     }
 
@@ -159,20 +159,20 @@ export class EncryptedClient implements ClientInterface {
         return this.client;
     }
 
-    protected hookEvent(type: string, callback: Function) {
+    protected hookEvent(type: string, callback: (args?: any) => void) {
         const cbs = this.handlers[type] || [];
         this.handlers[type] = cbs;
         cbs.push(callback);
     }
 
-    protected unhookEvent(type: string, callback: Function) {
-        const cbs = (this.handlers[type] || []).filter( (cb: Function) => callback !== cb );
+    protected unhookEvent(type: string, callback: (args?: any) => void) {
+        const cbs = (this.handlers[type] || []).filter( (cb: (args?: any) => void) => callback !== cb );
         this.handlers[type] = cbs;
     }
 
     protected triggerEvent(type: string, ...args: any) {
         const cbs = this.handlers[type] || [];
-        cbs.forEach( (callback: Function) => {
+        cbs.forEach( (callback) => {
             callback(...args);
         });
     }
