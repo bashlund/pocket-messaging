@@ -185,8 +185,8 @@ export class MessagingConstructor {
         let messaging = new Messaging(socket, 0);
         assert(Object.keys(messaging.pendingReply).length == 0);
 
-        assert(!messaging.isOpened);
-        assert(!messaging.isClosed);
+        assert(!messaging.isOpened());
+        assert(!messaging.isClosed());
 
         assert(messaging.dispatchLimit == -1);
         assert(messaging.isBusyOut == 0);
@@ -246,10 +246,10 @@ export class MessagingOpen {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(function() {
-            messaging.isClosed = true;
-            assert(messaging.isOpened == false);
+            messaging._isClosed = true;
+            assert(messaging.isOpened() == false);
             messaging.open();
-            assert(messaging.isOpened == false);
+            assert(messaging.isOpened() == false);
         });
     }
 
@@ -258,7 +258,7 @@ export class MessagingOpen {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(function() {
-            messaging.isOpened = true;
+            messaging._isOpened = true;
             let flag = false;
             // Expected to be called only on success
             // @ts-ignore: protected method
@@ -266,7 +266,7 @@ export class MessagingOpen {
                 flag = true;
             };
             messaging.open();
-            assert(messaging.isOpened == true);
+            assert(messaging.isOpened() == true);
             assert(flag == false); // No change
         });
     }
@@ -282,10 +282,10 @@ export class MessagingOpen {
             messaging.checkTimeouts = function() {
                 flag = true;
             };
-            assert(messaging.isOpened == false);
+            assert(messaging.isOpened() == false);
             assert(flag == false);
             messaging.open();
-            assert(messaging.isOpened == true);
+            assert(messaging.isOpened() == true);
             // @ts-ignore: expected to be modified by custom checkTimeouts
             assert(flag == true);
         });
@@ -315,12 +315,12 @@ export class MessagingClose {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(function() {
-            assert(messaging.isClosed == false);
-            assert(messaging.isOpened == false);
+            assert(messaging.isClosed() == false);
+            assert(messaging.isOpened() == false);
             messaging.open();
-            assert(messaging.isOpened == true);
+            assert(messaging.isOpened() == true);
             messaging.close();
-            assert(messaging.isClosed == true);
+            assert(messaging.isClosed() == true);
         });
     }
 }
@@ -360,7 +360,7 @@ export class MessagingSend {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(function() {
-            assert(messaging.isOpened == false);
+            assert(messaging.isOpened() == false);
             assert(Object.keys(messaging.pendingReply).length == 0);
             messaging.send(Buffer.from(""));
             assert(Object.keys(messaging.pendingReply).length == 0);
@@ -372,7 +372,7 @@ export class MessagingSend {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(function() {
-            messaging.isClosed = true;
+            messaging._isClosed = true;
             assert(Object.keys(messaging.pendingReply).length == 0);
             messaging.send(Buffer.from(""));
             assert(Object.keys(messaging.pendingReply).length == 0);
@@ -385,8 +385,8 @@ export class MessagingSend {
         let messaging = new Messaging(socket, 0);
         assert.throws(function() {
             assert(Object.keys(messaging.pendingReply).length == 0);
-            messaging.isOpened = true;
-            messaging.isClosed = false;
+            messaging._isOpened = true;
+            messaging._isClosed = false;
             messaging.send(Buffer.alloc(256).fill(256));
             assert(Object.keys(messaging.pendingReply).length == 0);
         }, /target length cannot exceed 255 bytes/);
@@ -399,8 +399,8 @@ export class MessagingSend {
         assert.doesNotThrow(function() {
             assert(messaging.outgoingQueue.chunks.length == 0);
             assert(Object.keys(messaging.pendingReply).length == 0);
-            messaging.isOpened = true;
-            messaging.isClosed = false;
+            messaging._isOpened = true;
+            messaging._isClosed = false;
             const replyStatus = messaging.send(Buffer.alloc(255).fill(255));
             assert(messaging.outgoingQueue.chunks.length == 1 + 1);
             assert(Object.keys(messaging.pendingReply).length == 0);
@@ -416,8 +416,8 @@ export class MessagingSend {
         assert.doesNotThrow(function() {
             assert(messaging.outgoingQueue.chunks.length == 0);
             assert(Object.keys(messaging.pendingReply).length == 0);
-            messaging.isOpened = true;
-            messaging.isClosed = false;
+            messaging._isOpened = true;
+            messaging._isClosed = false;
             const replyStatus = messaging.send(Buffer.alloc(255).fill(255), undefined, 1);
             assert(messaging.outgoingQueue.chunks.length == 1 + 1);
             assert(Object.keys(messaging.pendingReply).length == 1);
@@ -519,10 +519,10 @@ export class MessagingSocketClose {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(function() {
-            messaging.isClosed = true;
+            messaging._isClosed = true;
             //@ts-ignore protected function
             messaging.socketClose();
-            assert(messaging.isClosed == true);
+            assert(messaging.isClosed() == true);
         });
     }
 
@@ -537,10 +537,10 @@ export class MessagingSocketClose {
                 assert(type == EventType.CLOSE || type == EventType.ANY);
                 assert(arg);
             };
-            assert(messaging.isClosed == false);
+            assert(messaging.isClosed() == false);
             //@ts-ignore protected function
             messaging.socketClose();
-            assert(messaging.isClosed == true);
+            assert(messaging.isClosed() == true);
         });
     }
 }
@@ -879,8 +879,8 @@ export class MessagingEncryptOutgoing {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(async function() {
-            messaging.isOpened = true;
-            messaging.isClosed = false;
+            messaging._isOpened = true;
+            messaging._isClosed = false;
             const replyStatus = messaging.send(Buffer.alloc(255).fill(255));
             assert(messaging.outgoingQueue.chunks.length == 1 + 1);
         });
@@ -891,8 +891,8 @@ export class MessagingEncryptOutgoing {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(async function() {
-            messaging.isOpened = true;
-            messaging.isClosed = false;
+            messaging._isOpened = true;
+            messaging._isClosed = false;
             const outKey = Buffer.alloc(32);
             const outNonce = Buffer.alloc(24);
             const inKey = Buffer.alloc(32);
@@ -926,8 +926,8 @@ export class MessagingDispatchOutgoing {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(async function() {
-            messaging.isOpened = true;
-            messaging.isClosed = false;
+            messaging._isOpened = true;
+            messaging._isClosed = false;
             const outKey = Buffer.alloc(32);
             const outNonce = Buffer.alloc(24);
             const inKey = Buffer.alloc(32);
@@ -960,7 +960,7 @@ export class MessagingCheckTimeouts {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(async function() {
-            messaging.isOpened = false;
+            messaging._isOpened = false;
             //@ts-ignore: protected function
             messaging.checkTimeouts();
         });
@@ -971,7 +971,7 @@ export class MessagingCheckTimeouts {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(async function() {
-            messaging.isClosed = true;
+            messaging._isClosed = true;
             //@ts-ignore: protected function
             messaging.checkTimeouts();
         });
@@ -983,8 +983,8 @@ export class MessagingCheckTimeouts {
         let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(async function() {
             messaging.open();
-            assert(messaging.isOpened == true);
-            assert(messaging.isClosed == false);
+            assert(messaging.isOpened() == true);
+            assert(messaging.isClosed() == false);
             //@ts-ignore: protected function
             messaging.getTimeoutedPendingMessages = function() {
                 let messages: SentMessage[] = [];
@@ -1023,8 +1023,8 @@ export class MessagingGetTimeoutedPendingMessages {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(async function() {
-            messaging.isOpened = true;
-            messaging.isClosed = false;
+            messaging._isOpened = true;
+            messaging._isClosed = false;
             //@ts-ignore: protected function
             messaging.pendingReply["20"] = {
                 timestamp: 0,
@@ -1046,8 +1046,8 @@ export class MessagingGetTimeoutedPendingMessages {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(async function() {
-            messaging.isOpened = true;
-            messaging.isClosed = false;
+            messaging._isOpened = true;
+            messaging._isClosed = false;
             //@ts-ignore: protected function
             messaging.pendingReply["20"] = {
                 timestamp: 0,

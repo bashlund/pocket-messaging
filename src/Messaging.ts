@@ -59,12 +59,12 @@ export class Messaging {
     /**
      * Set to true if we have opened.
      */
-    protected isOpened: boolean;
+    protected _isOpened: boolean;
 
     /**
      * Set to true if we have closed.
      */
-    protected isClosed: boolean;
+    protected _isClosed: boolean;
 
     /** ID of the timeout in use for ping. */
     protected pingTimeout: ReturnType<typeof setTimeout> | undefined;
@@ -90,8 +90,8 @@ export class Messaging {
     constructor(socket: ClientInterface, pingInterval?: number) {
         this.socket = socket;
         this.pendingReply = {};
-        this.isOpened = false;
-        this.isClosed = false;
+        this._isOpened = false;
+        this._isClosed = false;
         this.pingInterval = pingInterval ?? DEFAULT_PING_INTERVAL;
         this.dispatchLimit = -1;
         this.isBusyOut = 0;
@@ -157,11 +157,11 @@ export class Messaging {
      * Don't open it until you have hooked the event emitter.
      */
     public open() {
-        if (this.isOpened || this.isClosed) {
+        if (this._isOpened || this._isClosed) {
             return;
         }
 
-        this.isOpened = true;
+        this._isOpened = true;
 
         this.socket.onData(this.socketData);
 
@@ -173,7 +173,15 @@ export class Messaging {
     }
 
     public isOpen(): boolean {
-        return this.isOpened && !this.isClosed;
+        return this._isOpened && !this._isClosed;
+    }
+
+    public isOpened(): boolean {
+        return this._isOpened;
+    }
+
+    public isClosed(): boolean {
+        return this._isClosed;
     }
 
     /**
@@ -181,7 +189,7 @@ export class Messaging {
      *
      */
     public close() {
-        if (this.isClosed) {
+        if (this._isClosed) {
             return;
         }
         // Note the socket was already open when it was passed into Messaging.
@@ -221,12 +229,12 @@ export class Messaging {
      *     eventEmitter property is set if expecting reply
      */
     public send(target: Buffer | string, data?: Buffer, timeout: number = -1, stream: boolean = false, timeoutStream: number = 0): SendReturn | undefined {
-        //if (!this.isOpened) {
+        //if (!this._isOpened) {
             //console.debug("Messaging is not opened, cannot send");
             //return undefined;
         //}
 
-        if (this.isClosed) {
+        if (this._isClosed) {
             console.debug("Messaging is closed, cannot send");
             return undefined;
         }
@@ -289,7 +297,7 @@ export class Messaging {
      * Default is 10000 (10 sec). 0 means disabled.
      */
     public enablePing(pingInterval: number = 10000) {
-        if (this.isClosed) {
+        if (this._isClosed) {
             return;
         }
 
@@ -460,10 +468,10 @@ export class Messaging {
      * Notify all pending messages about the close.
      */
     protected socketClose = (hadError: boolean) => {
-        if (this.isClosed) {
+        if (this._isClosed) {
             return;
         }
-        this.isClosed = true;
+        this._isClosed = true;
 
         this.disablePing();
 
@@ -486,11 +494,11 @@ export class Messaging {
      * There is no reply expected on the ping.
      */
     protected sendPing = () => {
-        if (this.isClosed) {
+        if (this._isClosed) {
             return;
         }
 
-        if (this.isOpened) {
+        if (this._isOpened) {
             // Send empty message with an un-routable target.
             this.send(Buffer.from([0]));
         }
@@ -697,7 +705,7 @@ export class Messaging {
      *
      */
     protected checkTimeouts = () => {
-        if (!this.isOpened || this.isClosed) {
+        if (!this._isOpened || this._isClosed) {
             return;
         }
 
