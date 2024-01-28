@@ -125,9 +125,6 @@ export class HandshakeFactory extends SocketFactory implements HandshakeFactoryI
             this.triggerEvent(EVENTS.HANDSHAKE.name, {messaging, isServer: e.isServer, handshakeResult});
         }
         catch(error) {
-            if (typeof error === "string") {
-                error = new Error(error);
-            }
             this.triggerEvent(EVENTS.HANDSHAKE_ERROR.name, {error, client: e.client});
             this.triggerEvent(EVENTS.ERROR.name, {eventName: EVENTS.HANDSHAKE_ERROR, e: {error, client: e.client}});
             e.client.close();

@@ -29,7 +29,7 @@ function increaseNonce(nonceOriginal: Buffer): Buffer {
  */
 export function box(message: Buffer, nonce: Buffer, key: Buffer): [Buffer, Buffer] {
     if (message.length > 65535) {
-        throw "Maximum message length is 65535 when boxing it";
+        throw new Error("Maximum message length is 65535 when boxing it");
     }
     const encryptedBody = sodium.crypto_secretbox_easy(message, nonce, key);
     const headerNonce = increaseNonce(nonce);
@@ -65,7 +65,7 @@ export function unbox(ciphertext: Buffer, nonce: Buffer, key: Buffer): [Buffer, 
     const headerNonce = increaseNonce(nonce);
     const headerArray = sodium.crypto_secretbox_open_easy(encrypted_header, headerNonce, key);
     if (!headerArray) {
-        throw "Could not unbox header";
+        throw new Error("Could not unbox header");
     }
     const header = Buffer.from(headerArray);
 
@@ -77,7 +77,7 @@ export function unbox(ciphertext: Buffer, nonce: Buffer, key: Buffer): [Buffer, 
     const encryptedBody = ciphertext.slice(34, 34 + bodyLength);
     const body = sodium.crypto_secretbox_open_easy(Buffer.concat([header.slice(2), encryptedBody]), nonce, key);
     if (!body) {
-        throw "Could not unbox body";
+        throw new Error("Could not unbox body");
     }
 
     const nextNonce = increaseNonce(headerNonce);

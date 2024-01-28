@@ -153,8 +153,15 @@ export class Messaging {
     }
 
     /**
-     * Open this Messaging object for communication.
-     * Don't open it until you have hooked the event emitter.
+     * Open this Messaging for inbound data.
+     *
+     * Do not open it until you have hooked the event emitter
+     * to not loose any incoming data.
+     *
+     * It is technically allowed to send data before opening,
+     * but the Messaging should be opened very shortly after
+     * sending so that replies can come through and so that
+     * timeouts are processed properly.
      */
     public open() {
         if (this._isOpened || this._isClosed) {
@@ -225,15 +232,12 @@ export class Messaging {
      * @param timeoutStream milliseconds to wait for secondary replies, 0 means forever (default).
      *     Only relevant if expecting multiple replies (stream = true).
      * @return SendReturn | undefined
-     *     msgId is always set
-     *     eventEmitter property is set if expecting reply
+     *     SendReturn.msgId is always set
+     *     SendReturn.eventEmitter property is set if expecting reply
+     *     undefined is returned as a silent error when the Messaging is closed and data cannot be sent again on this Messaging instance.
+     * @throws on malformed input
      */
     public send(target: Buffer | string, data?: Buffer, timeout: number = -1, stream: boolean = false, timeoutStream: number = 0): SendReturn | undefined {
-        //if (!this._isOpened) {
-            //console.debug("Messaging is not opened, cannot send");
-            //return undefined;
-        //}
-
         if (this._isClosed) {
             console.debug("Messaging is closed, cannot send");
             return undefined;
@@ -246,16 +250,17 @@ export class Messaging {
         data = data ?? Buffer.alloc(0);
 
         if (data.length > MESSAGE_MAX_BYTES) {
-            throw `Data chunk to send cannot exceed ${MESSAGE_MAX_BYTES} bytes. Trying to send ${data.length} bytes`;
+            throw new Error(`Data chunk to send cannot exceed ${MESSAGE_MAX_BYTES} bytes. Trying to send ${data.length} bytes`);
         }
 
         if (target.length > 255) {
-            throw "target length cannot exceed 255 bytes";
+            throw new Error("target length cannot exceed 255 bytes");
         }
 
         const msgId = this.generateMsgId();
 
-        const expectingReply = timeout > -1 ? (stream ? ExpectingReply.MULTIPLE : ExpectingReply.SINGLE) : ExpectingReply.NONE;
+        const expectingReply = timeout > -1 ?
+            (stream ? ExpectingReply.MULTIPLE : ExpectingReply.SINGLE) : ExpectingReply.NONE;
 
         const header: Header = {
             version: 0,
@@ -335,10 +340,10 @@ export class Messaging {
 
     protected encodeHeader(header: Header): Buffer {
         if (header.target.length > 255) {
-            throw "Target length cannot exceed 255 bytes.";
+            throw "Target length cannot exceed 255 bytes";
         }
         if (header.msgId.length !== 4) {
-            throw "msgId length must be exactly 4 bytes long.";
+            throw "msgId length must be exactly 4 bytes long";
         }
 
         const headerLength = 1 + 4 + 1 + 4 + 1 + header.target.length;
@@ -365,12 +370,12 @@ export class Messaging {
         let pos = 0;
         const version = buffer.readUInt8(pos);
         if (version !== 0) {
-            throw "Unexpected version nr. Only supporting version 0.";
+            throw "Unexpected version nr, only supporting version 0";
         }
         pos++
         const totalLength = buffer.readUInt32LE(pos);
         if (totalLength !== buffer.length) {
-            throw "Mismatch in expected length and provided buffer length.";
+            throw "Mismatch in expected length and provided buffer length";
         }
         pos = pos + 4;
 
@@ -518,7 +523,7 @@ export class Messaging {
             this.processInqueue();
         }
         else {
-            throw new Error("Messaing does not work with text data");
+            throw new Error("Messaging does not work with text data");
         }
     }
 

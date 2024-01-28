@@ -89,7 +89,7 @@ function secretBox(msg: Buffer, nonce: Buffer, key: Buffer): Buffer {
 function secretBoxOpen(ciphertext: Buffer, nonce: Buffer, key: Buffer): Buffer {
     const unboxed = sodium.crypto_secretbox_open_easy(ciphertext, nonce, key);
     if (!unboxed) {
-        throw "Could not open box";
+        throw new Error("Could not open box");
     }
     return Buffer.from(unboxed);
 }
@@ -120,11 +120,11 @@ function hashFn(message: Buffer): Buffer {
  */
 function message1(clientEphemeralPk: Buffer, discriminator: Buffer): Buffer {
     if (clientEphemeralPk.length !== 32) {
-        throw "clientEphemeralPk must be 32 bytes";
+        throw new Error("clientEphemeralPk must be 32 bytes");
     }
 
     if (discriminator.length !== 32) {
-        throw "Discriminator must be 32 bytes";
+        throw new Error("Discriminator must be 32 bytes");
     }
 
     const clientHmac = hmac(clientEphemeralPk, discriminator);
@@ -138,18 +138,18 @@ function message1(clientEphemeralPk: Buffer, discriminator: Buffer): Buffer {
  */
 function verifyMessage1(msg1: Buffer, discriminator: Buffer): Buffer {
     if (msg1.length !== 65) {
-        throw "Incoming message 1 must be 65 bytes long";
+        throw new Error("Incoming message 1 must be 65 bytes long");
     }
 
     if (discriminator.length !== 32) {
-        throw "Discriminator must be 32 bytes";
+        throw new Error("Discriminator must be 32 bytes");
     }
 
     const version = msg1.slice(0, 1);
 
     // Check so versions match.
     if (!Equals(version, Version)) {
-        throw "Mismatching version of the handshake";
+        throw new Error("Mismatching version of the handshake");
     }
 
     const hmac = msg1.slice(1, 1+32);
@@ -157,7 +157,7 @@ function verifyMessage1(msg1: Buffer, discriminator: Buffer): Buffer {
     if (assertHmac(hmac, clientEphemeralPk, discriminator)) {
         return clientEphemeralPk;
     }
-    throw "Non matching discriminators";
+    throw new Error("Non matching discriminators");
 }
 
 /**
@@ -166,15 +166,15 @@ function verifyMessage1(msg1: Buffer, discriminator: Buffer): Buffer {
  */
 function message2(difficulty: Buffer, serverEphemeralPk: Buffer, discriminator: Buffer): Buffer {
     if (difficulty.length !== 1) {
-        throw "Difficulty must be of length 1 bytes";
+        throw new Error("Difficulty must be of length 1 bytes");
     }
 
     if (serverEphemeralPk.length !== 32) {
-        throw "ServerEphemeralPk must be of length 32 bytes";
+        throw new Error("ServerEphemeralPk must be of length 32 bytes");
     }
 
     if (discriminator.length !== 32) {
-        throw "Discriminator must be 32 bytes";
+        throw new Error("Discriminator must be 32 bytes");
     }
 
     const serverHmac = hmac(Buffer.concat([difficulty, serverEphemeralPk]), discriminator);
@@ -190,11 +190,11 @@ function message2(difficulty: Buffer, serverEphemeralPk: Buffer, discriminator: 
  */
 function verifyMessage2(msg2: Buffer, discriminator: Buffer): [Buffer, Buffer] {
     if (msg2.length !== 65) {
-        throw "Incoming message 2 must be of 65 bytes";
+        throw new Error("Incoming message 2 must be of 65 bytes");
     }
 
     if (discriminator.length !== 32) {
-        throw "Discriminator must be 32 bytes";
+        throw new Error("Discriminator must be 32 bytes");
     }
 
     const hmac = msg2.slice(0, 32);
@@ -205,7 +205,7 @@ function verifyMessage2(msg2: Buffer, discriminator: Buffer): [Buffer, Buffer] {
         return [difficulty, serverEphemeralPk];
     }
 
-    throw "Non matching discriminators";
+    throw new Error("Non matching discriminators");
 }
 
 /**
@@ -214,27 +214,27 @@ function verifyMessage2(msg2: Buffer, discriminator: Buffer): [Buffer, Buffer] {
  */
 function message3(detachedSigA: Buffer, nonce: Buffer, discriminator: Buffer, clientLongtermPk: Buffer, sharedSecret_ab: Buffer, sharedSecret_aB: Buffer, clientData: Buffer | undefined): Buffer {
     if (detachedSigA.length !== 64) {
-        throw "detachedSigA must be 64 bytes";
+        throw new Error("detachedSigA must be 64 bytes");
     }
 
     if (nonce.length !== 4) {
-        throw "Nonce must be 4 bytes";
+        throw new Error("Nonce must be 4 bytes");
     }
 
     if (discriminator.length !== 32) {
-        throw "Discriminator must be 32 bytes";
+        throw new Error("Discriminator must be 32 bytes");
     }
 
     if (clientLongtermPk.length !== 32) {
-        throw "ServerEphemeralPk must be of length 32 bytes";
+        throw new Error("ServerEphemeralPk must be of length 32 bytes");
     }
 
     if (sharedSecret_ab.length !== 32) {
-        throw "sharedSecret_ab must be of length 32 bytes";
+        throw new Error("sharedSecret_ab must be of length 32 bytes");
     }
 
     if (sharedSecret_aB.length !== 32) {
-        throw "sharedSecret_aB must be of length 32 bytes";
+        throw new Error("sharedSecret_aB must be of length 32 bytes");
     }
 
     if (!clientData) {
@@ -242,7 +242,7 @@ function message3(detachedSigA: Buffer, nonce: Buffer, discriminator: Buffer, cl
     }
 
     if (clientData.length > 1024*60) {
-        throw "Client data cannot exceed 60 KiB";
+        throw new Error("Client data cannot exceed 60 KiB");
     }
 
     const message = Buffer.concat([detachedSigA, nonce, clientLongtermPk, clientData]);
@@ -263,25 +263,25 @@ function message3(detachedSigA: Buffer, nonce: Buffer, discriminator: Buffer, cl
  */
 function verifyMessage3(msg3: Buffer, serverLongtermPk: Buffer, discriminator: Buffer, sharedSecret_ab: Buffer, sharedSecret_aB: Buffer): [Buffer, Buffer, Buffer, Buffer] {
     if (serverLongtermPk.length !== 32) {
-        throw "serverLongtermPk must be of length 32 bytes";
+        throw new Error("serverLongtermPk must be of length 32 bytes");
     }
 
     if (discriminator.length !== 32) {
-        throw "Discriminator must be 32 bytes";
+        throw new Error("Discriminator must be 32 bytes");
     }
 
     if (sharedSecret_ab.length !== 32) {
-        throw "sharedSecret_ab must be of length 32 bytes";
+        throw new Error("sharedSecret_ab must be of length 32 bytes");
     }
 
     if (sharedSecret_aB.length !== 32) {
-        throw "sharedSecret_aB must be of length 32 bytes";
+        throw new Error("sharedSecret_aB must be of length 32 bytes");
     }
 
     const length = msg3.readUInt16BE(0);
     const ciphertext = msg3.slice(2);
     if (ciphertext.length !== length) {
-        throw "Mismatching expected length of message 3";
+        throw new Error("Mismatching expected length of message 3");
     }
 
     const boxNonce = Buffer.alloc(24).fill(0);
@@ -294,7 +294,7 @@ function verifyMessage3(msg3: Buffer, serverLongtermPk: Buffer, discriminator: B
     const msg = Buffer.concat([nonce, discriminator, serverLongtermPk, hashFn(sharedSecret_ab)]);
 
     if (!signVerifyDetached(msg, detachedSigA, clientLongtermPk)) {
-        throw "Signature does not match";
+        throw new Error("Signature does not match");
     }
 
     return [nonce, clientLongtermPk, detachedSigA, clientData];
@@ -305,31 +305,31 @@ function verifyMessage3(msg3: Buffer, serverLongtermPk: Buffer, discriminator: B
  */
 function message4(discriminator: Buffer, detachedSigA: Buffer, clientLongtermPk: Buffer, sharedSecret_ab: Buffer, sharedSecret_aB: Buffer, sharedSecret_Ab: Buffer, serverLongtermSk: Buffer, serverData: Buffer | undefined): Buffer {
     if (discriminator.length !== 32) {
-        throw "Discriminator must be 32 bytes";
+        throw new Error("Discriminator must be 32 bytes");
     }
 
     if (detachedSigA.length !== 64) {
-        throw "detachedSigA must be 64 bytes";
+        throw new Error("detachedSigA must be 64 bytes");
     }
 
     if (clientLongtermPk.length !== 32) {
-        throw "clientLongtermPk must be of length 32 bytes";
+        throw new Error("clientLongtermPk must be of length 32 bytes");
     }
 
     if (sharedSecret_ab.length !== 32) {
-        throw "sharedSecret_ab must be of length 32 bytes";
+        throw new Error("sharedSecret_ab must be of length 32 bytes");
     }
 
     if (sharedSecret_aB.length !== 32) {
-        throw "sharedSecret_aB must be of length 32 bytes";
+        throw new Error("sharedSecret_aB must be of length 32 bytes");
     }
 
     if (sharedSecret_Ab.length !== 32) {
-        throw "sharedSecret_Ab must be of length 32 bytes";
+        throw new Error("sharedSecret_Ab must be of length 32 bytes");
     }
 
     if (serverLongtermSk.length !== 64) {
-        throw "serverLongtermSk must be of length 64 bytes";
+        throw new Error("serverLongtermSk must be of length 64 bytes");
     }
 
     if (!serverData) {
@@ -337,7 +337,7 @@ function message4(discriminator: Buffer, detachedSigA: Buffer, clientLongtermPk:
     }
 
     if (serverData.length > 1024*60) {
-        throw "Server data cannot exceed 60 KiB";
+        throw new Error("Server data cannot exceed 60 KiB");
     }
 
     const detachedSigB = signDetached(Buffer.concat([discriminator, detachedSigA, clientLongtermPk, hashFn(sharedSecret_ab)]), serverLongtermSk);
@@ -356,37 +356,37 @@ function message4(discriminator: Buffer, detachedSigA: Buffer, clientLongtermPk:
  */
 function verifyMessage4(msg4: Buffer, detachedSigA: Buffer, clientLongtermPk: Buffer, serverLongtermPk: Buffer, discriminator: Buffer, sharedSecret_ab: Buffer, sharedSecret_aB: Buffer, sharedSecret_Ab: Buffer): Buffer {
     if (detachedSigA.length !== 64) {
-        throw "detachedSigA must be 64 bytes";
+        throw new Error("detachedSigA must be 64 bytes");
     }
 
     if (clientLongtermPk.length !== 32) {
-        throw "clientLongtermPk must be of length 32 bytes";
+        throw new Error("clientLongtermPk must be of length 32 bytes");
     }
 
     if (serverLongtermPk.length !== 32) {
-        throw "serverLongtermPk must be of length 32 bytes";
+        throw new Error("serverLongtermPk must be of length 32 bytes");
     }
 
     if (discriminator.length !== 32) {
-        throw "Discriminator must be 32 bytes";
+        throw new Error("Discriminator must be 32 bytes");
     }
 
     if (sharedSecret_ab.length !== 32) {
-        throw "sharedSecret_ab must be of length 32 bytes";
+        throw new Error("sharedSecret_ab must be of length 32 bytes");
     }
 
     if (sharedSecret_aB.length !== 32) {
-        throw "sharedSecret_aB must be of length 32 bytes";
+        throw new Error("sharedSecret_aB must be of length 32 bytes");
     }
 
     if (sharedSecret_Ab.length !== 32) {
-        throw "sharedSecret_Ab must be of length 32 bytes";
+        throw new Error("sharedSecret_Ab must be of length 32 bytes");
     }
 
     const length = msg4.readUInt16BE(0);
     const ciphertext = msg4.slice(2);
     if (ciphertext.length !== length) {
-        throw "Mismatching expected length of message 4";
+        throw new Error("Mismatching expected length of message 4");
     }
 
     const boxNonce = Buffer.alloc(24).fill(0);
@@ -397,7 +397,7 @@ function verifyMessage4(msg4: Buffer, detachedSigA: Buffer, clientLongtermPk: Bu
     const serverData = unboxed.slice(64);
     const msg = Buffer.concat([discriminator, detachedSigA, clientLongtermPk, hashFn(sharedSecret_ab)]);
     if (!signVerifyDetached(msg, detachedSigB, serverLongtermPk)) {
-        throw "Signature does not match";
+        throw new Error("Signature does not match");
     }
     return serverData;
 }
@@ -415,7 +415,7 @@ function CalculateNonce(difficulty: number, serverEphemeralPk: Buffer): Buffer {
         b.writeUInt32BE(n);
         nonce = hashFn(b).slice(0, 4);
         if (n>=0xffffffff) {
-            throw "Nonce overflow";
+            throw new Error("Nonce overflow");
         }
     }
     return nonce;
@@ -469,7 +469,7 @@ export async function HandshakeAsClient(client: ClientInterface, clientLongtermS
             const lengthPrefix = await new ByteSize(client).read(2);
             const length = lengthPrefix.readUInt16BE(0);
             if (length - 64 > maxServerDataSize) {
-                throw "Server data length too big";
+                throw new Error("Server data length too big");
             }
 
             const msg4_ciphertext = await new ByteSize(client).read(length);
@@ -514,7 +514,7 @@ export async function HandshakeAsServer(client: ClientInterface, serverLongtermS
         try {
             if (difficulty > 8) {
                 // We support 8 nibbles of nonce.
-                throw "Too high difficulty requested, max 8.";
+                throw new Error("Too high difficulty requested, max 8");
             }
 
             await sodium.ready;
@@ -541,7 +541,7 @@ export async function HandshakeAsServer(client: ClientInterface, serverLongtermS
             const lengthPrefix = await new ByteSize(client).read(2, 3000 + difficulty * 30000);
             const length = lengthPrefix.readUInt16BE(0);
             if (length - 100 > maxClientDataSize) {
-                throw "Client data length too big";
+                throw new Error("Client data length too big");
             }
 
             const msg3_ciphertext = await new ByteSize(client).read(length);
@@ -550,23 +550,23 @@ export async function HandshakeAsServer(client: ClientInterface, serverLongtermS
             const [nonce, clientLongtermPk, detachedSigA, clientData] = verifyMessage3(msg3, serverLongtermPk, discriminator, sharedSecret_ab, sharedSecret_aB);
 
             if (!VerifyNonce(difficulty, serverEphemeralPk, nonce)) {
-                throw "Nonce does not verify";
+                throw new Error("Nonce does not verify");
             }
 
             // Verify permissioned handshake for client longterm pk
             if (allowedClientKey) {
                 if (typeof(allowedClientKey) === "function") {
                     if (!allowedClientKey(clientLongtermPk)) {
-                        throw `Client longterm pk (${clientLongtermPk.toString("hex")} not allowed by function, IP: ${client.getRemoteAddress()}`;
+                        throw new Error(`Client longterm pk (${clientLongtermPk.toString("hex")} not allowed by function, IP: ${client.getRemoteAddress()}`);
                     }
                 }
                 else if (Array.isArray(allowedClientKey)) {
                     if (!allowedClientKey.find( (pk) => Equals(pk, clientLongtermPk) )) {
-                        throw `Client longterm pk (${clientLongtermPk.toString("hex")}) not in list of allowed public keys, IP: ${client.getRemoteAddress()}`;
+                        throw new Error(`Client longterm pk (${clientLongtermPk.toString("hex")}) not in list of allowed public keys, IP: ${client.getRemoteAddress()}`);
                     }
                 }
                 else {
-                    throw "Unknown client longterm pk validator";
+                    throw new Error("Unknown client longterm pk validator");
                 }
             }
             else {

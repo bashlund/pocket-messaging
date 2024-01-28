@@ -444,7 +444,7 @@ export class MessagingEncodeHeader {
             };
             //@ts-ignore protected function
             messaging.encodeHeader(header);
-        }, /Target length cannot exceed 255 bytes./);
+        }, /Target length cannot exceed 255 bytes/);
     }
 
     @Test()
@@ -461,7 +461,7 @@ export class MessagingEncodeHeader {
             };
             //@ts-ignore protected function
             messaging.encodeHeader(header);
-        }, /msgId length must be exactly 4 bytes long./);
+        }, /msgId length must be exactly 4 bytes long/);
     }
 }
 
@@ -486,7 +486,7 @@ export class MessagingDecodeHeader {
             encodedHeader.writeUInt8(255);
             //@ts-ignore protected function
             messaging.decodeHeader(encodedHeader);
-        }, /Unexpected version nr. Only supporting version 0./);
+        }, /Unexpected version nr, only supporting version 0/);
     }
 
     @Test()
@@ -508,7 +508,7 @@ export class MessagingDecodeHeader {
             encodedHeader.writeUInt32LE(234, 1);
             //@ts-ignore protected function
             messaging.decodeHeader(encodedHeader);
-        }, /Mismatch in expected length and provided buffer length./);
+        }, /Mismatch in expected length and provided buffer length/);
     }
 }
 
