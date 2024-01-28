@@ -30,6 +30,14 @@ export class EncryptedClient implements ClientInterface {
         await init();  // Init sodium
     }
 
+    public getSocket(): any {
+        return this.client.getSocket();
+    }
+
+    public isWebSocket(): boolean {
+        return this.client.isWebSocket();
+    }
+
     public connect() {
         throw new Error("The EncryptedSocket's underlaying socket should already have been connected");
     }
@@ -40,10 +48,6 @@ export class EncryptedClient implements ClientInterface {
 
     public getPeerPublicKey(): Buffer {
         return this.peerPublicKey;
-    }
-
-    public sendString(data: string) {
-        this.send(Buffer.from(data));
     }
 
     public close() {
@@ -72,12 +76,17 @@ export class EncryptedClient implements ClientInterface {
     }
 
     public send(data: Buffer) {
-        // encrypt data
-        const [encryptedData, nextNonce] = box(data, this.outgoingNonce, this.outgoingKey);
+        if (Buffer.isBuffer(data)) {
+            // encrypt data
+            const [encryptedData, nextNonce] = box(data, this.outgoingNonce, this.outgoingKey);
 
-        this.outgoingNonce = nextNonce;
+            this.outgoingNonce = nextNonce;
 
-        this.client.send(encryptedData);
+            this.client.send(encryptedData);
+        }
+        else {
+            throw new Error("EncryptedClient does not work with text data");
+        }
     }
 
     public onError(fn: SocketErrorCallback) {
@@ -104,9 +113,14 @@ export class EncryptedClient implements ClientInterface {
         }
     }
 
-    protected handleOnData = async (data: Buffer) => {
-        this.incomingData = Buffer.concat([this.incomingData, data]);
-        this.decryptData();
+    protected handleOnData = async (data: Buffer | string) => {
+        if (Buffer.isBuffer(data)) {
+            this.incomingData = Buffer.concat([this.incomingData, data]);
+            this.decryptData();
+        }
+        else {
+            throw new Error("EncryptedClient does not work with text data");
+        }
     };
 
     public onConnect(fn: SocketConnectCallback) {

@@ -503,10 +503,15 @@ export class Messaging {
     /**
      * Buffer incoming raw data from the socket and process it.
      */
-    protected socketData = (data: Buffer) => {
-        this.incomingQueue.chunks.push(data);
-        this.isBusyIn++;
-        this.processInqueue();
+    protected socketData = (data: Buffer | string) => {
+        if (Buffer.isBuffer(data)) {
+            this.incomingQueue.chunks.push(data);
+            this.isBusyIn++;
+            this.processInqueue();
+        }
+        else {
+            throw new Error("Messaing does not work with text data");
+        }
     }
 
     protected processInqueue = async () => {

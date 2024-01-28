@@ -53,12 +53,12 @@ export class EncryptedClientSpec {
 
                 await sleep(100);
 
-                this.socket2.onData( (data: Buffer) => {
+                this.socket2.onData( (data: Buffer | string) => {
                     // TODO this assert must throw properly
                     assert(data.length > 5);
                 });
 
-                encryptedSocket2.onData( (data: Buffer) => {
+                encryptedSocket2.onData( (data: Buffer | string) => {
                     // TODO this assert must throw properly
                     assert(data.toString() === "World");
                 });
@@ -86,13 +86,13 @@ export class EncryptedClientSpec {
 
             await encryptedSocket1.init();
 
-            this.socket1.onData( (data: Buffer) => {
+            this.socket1.onData( (data: Buffer | string) => {
                 //console.error("socket1 raw data", data);
                 // TODO this assert must throw properly
                 assert(data.length > 5);
             });
 
-            encryptedSocket1.onData( (data: Buffer) => {
+            encryptedSocket1.onData( (data: Buffer | string) => {
                 //console.error("socket1 decrypted data", data);
                 // TODO this assert must throw properly
                 assert(data.toString() === "Hello");
