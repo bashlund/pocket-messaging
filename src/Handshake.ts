@@ -439,7 +439,7 @@ export async function HandshakeAsClient(
     serverLongtermPk: Buffer,
     discriminator: Buffer,
     clientData?: Buffer,
-    maxServerDataSize: number = 1024): Promise<HandshakeResult> {
+    maxServerDataSize: number = 2048): Promise<HandshakeResult> {
 
     await sodium.ready;
 
@@ -518,7 +518,7 @@ export async function HandshakeAsServer(
     allowedClientKey?: ((clientLongtermPk: Buffer) => boolean) | Buffer[],
     serverData?: Buffer,
     difficulty: number = 0,
-    maxClientDataSize: number = 1024): Promise<HandshakeResult> {
+    maxClientDataSize: number = 2048): Promise<HandshakeResult> {
 
     if (difficulty > 8) {
         // We support 8 nibbles of nonce.
