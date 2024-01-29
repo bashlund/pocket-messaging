@@ -38,6 +38,10 @@ export class EncryptedClient implements ClientInterface {
         return this.client.isWebSocket();
     }
 
+    public isTextMode(): boolean {
+        return this.client.isTextMode();
+    }
+
     public connect() {
         throw new Error("The EncryptedSocket's underlaying socket should already have been connected");
     }
