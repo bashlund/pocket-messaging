@@ -64,11 +64,11 @@ export class MessagingSpec {
             config: 2
         };
         //@ts-ignore protected function
-        const headerBuffer = this.messaging1.encodeHeader(header);
+        const headerBuffer = Messaging.EncodeHeader(header);
         expect.toBeTrue(headerBuffer.length === 11 + header.target.length);
         const messageBuffer = Buffer.concat([headerBuffer, Buffer.alloc(33).fill(33)]);
         //@ts-ignore protected function
-        const ret = this.messaging1.decodeHeader(messageBuffer);
+        const ret = Messaging.DecodeHeader(messageBuffer);
         expect.toBeTrue(ret !== undefined);
         if (!ret) return; //@ts-chillax trust me on this one
         const [header2, data2] = ret;
@@ -443,7 +443,7 @@ export class MessagingEncodeHeader {
                 config: 2
             };
             //@ts-ignore protected function
-            messaging.encodeHeader(header);
+            Messaging.EncodeHeader(header);
         }, /Target length cannot exceed 255 bytes/);
     }
 
@@ -460,7 +460,7 @@ export class MessagingEncodeHeader {
                 config: 2
             };
             //@ts-ignore protected function
-            messaging.encodeHeader(header);
+            Messaging.EncodeHeader(header);
         }, /msgId length must be exactly 4 bytes long/);
     }
 }
@@ -482,10 +482,10 @@ export class MessagingDecodeHeader {
                 config: 2
             };
             //@ts-ignore protected function
-            let encodedHeader = messaging.encodeHeader(header);
+            let encodedHeader = Messaging.EncodeHeader(header);
             encodedHeader.writeUInt8(255);
             //@ts-ignore protected function
-            messaging.decodeHeader(encodedHeader);
+            Messaging.DecodeHeader(encodedHeader);
         }, /Unexpected version nr, only supporting version 0/);
     }
 
@@ -504,10 +504,10 @@ export class MessagingDecodeHeader {
                 config: 2
             };
             //@ts-ignore protected function
-            let encodedHeader = messaging.encodeHeader(header);
+            let encodedHeader = Messaging.EncodeHeader(header);
             encodedHeader.writeUInt32LE(234, 1);
             //@ts-ignore protected function
-            messaging.decodeHeader(encodedHeader);
+            Messaging.DecodeHeader(encodedHeader);
         }, /Mismatch in expected length and provided buffer length/);
     }
 }
@@ -689,7 +689,7 @@ export class MessagingAssembleIncoming {
                 return Buffer.from("");
             }
             //@ts-ignore protected function
-            messaging.decodeHeader = function() {
+            Messaging.DecodeHeader = function() {
                 return undefined;
             }
 
@@ -712,7 +712,7 @@ export class MessagingAssembleIncoming {
                 return Buffer.from("");
             }
             //@ts-ignore protected function
-            messaging.decodeHeader = function() {
+            Messaging.DecodeHeader = function() {
                 messaging.incomingQueue.chunks.length = 0;
                 return [{version: 0, target: "tgt", dataLength: 3, config: false}, Buffer.from("")];
             }
@@ -756,7 +756,7 @@ export class MessagingDispatchIncoming {
                 return Buffer.from("");
             }
             //@ts-ignore protected function
-            messaging.decodeHeader = function() {
+            Messaging.DecodeHeader = function() {
                 messaging.incomingQueue.chunks.length = 0;
                 return [{version: 0, target: Buffer.from("tgt"), dataLength: 3, config: false}, Buffer.from("")];
             }
@@ -785,7 +785,7 @@ export class MessagingDispatchIncoming {
                 return Buffer.from("");
             }
             //@ts-ignore protected function
-            messaging.decodeHeader = function() {
+            Messaging.DecodeHeader = function() {
                 messaging.incomingQueue.chunks.length = 0;
                 return [{version: 0, target: Buffer.from("tgt"), dataLength: 3, config: false}, Buffer.from("")];
             }
@@ -814,7 +814,7 @@ export class MessagingDispatchIncoming {
                 return Buffer.from("");
             }
             //@ts-ignore protected function
-            messaging.decodeHeader = function() {
+            Messaging.DecodeHeader = function() {
                 messaging.incomingQueue.chunks.length = 0;
                 return [{version: 0, target: Buffer.from("tgt"), dataLength: 3, config: false}, Buffer.from("")];
             }

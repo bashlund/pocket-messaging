@@ -223,7 +223,7 @@ export class Messaging {
      * @param target: Buffer | string either set as routing target as string, or as message ID in reply to (as buffer).
      *  The receiving Messaging instance will check if target matches a msg ID which is waiting for a reply and in such case the message till be emitted on that EventEmitter,
      *  or else it will pass it to the router to see if it matches some route.
-     * @param data: Buffer of data to be sent. Note that data cannot exceed MESSAGE_MAX_BYTES (64 KiB).
+     * @param data: Buffer of data to be sent. Note that data (payload) cannot exceed MESSAGE_MAX_BYTES.
      * @param timeout milliseconds to wait for the first reply (defaults to -1)
      *     -1 means we are not expecting a reply
      *     0 or greater means that we are expecting a reply, 0 means wait forever
@@ -269,7 +269,7 @@ export class Messaging {
             msgId,
             config: expectingReply
         };
-        const headerBuffer = this.encodeHeader(header);
+        const headerBuffer = Messaging.EncodeHeader(header);
         this.outgoingQueue.chunks.push(headerBuffer);
         this.outgoingQueue.chunks.push(data);
         this.isBusyOut++;
@@ -338,12 +338,15 @@ export class Messaging {
         return msgId;
     }
 
-    protected encodeHeader(header: Header): Buffer {
+    /**
+     * @throws on malformed input
+     */
+    public static EncodeHeader(header: Header): Buffer {
         if (header.target.length > 255) {
-            throw "Target length cannot exceed 255 bytes";
+            throw new Error("Target length cannot exceed 255 bytes");
         }
         if (header.msgId.length !== 4) {
-            throw "msgId length must be exactly 4 bytes long";
+            throw new Error("msgId length must be exactly 4 bytes long");
         }
 
         const headerLength = 1 + 4 + 1 + 4 + 1 + header.target.length;
@@ -366,16 +369,19 @@ export class Messaging {
         return buffer;
     }
 
-    protected decodeHeader(buffer: Buffer): [Header, Buffer] | undefined {
+    /**
+     * @throws on malformed input
+     */
+    public static DecodeHeader(buffer: Buffer): [Header, Buffer] {
         let pos = 0;
         const version = buffer.readUInt8(pos);
         if (version !== 0) {
-            throw "Unexpected version nr, only supporting version 0";
+            throw new Error("Unexpected version nr, only supporting version 0");
         }
         pos++
         const totalLength = buffer.readUInt32LE(pos);
         if (totalLength !== buffer.length) {
-            throw "Mismatch in expected length and provided buffer length";
+            throw new Error("Mismatch in expected length and provided buffer length");
         }
         pos = pos + 4;
 
@@ -580,12 +586,20 @@ export class Messaging {
                 return true;
             }
 
-            const ret = this.decodeHeader(buffer);
-            if (!ret) {
+            let ret: [Header, Buffer];
+            try {
+                ret = Messaging.DecodeHeader(buffer);
+
+            } catch(e) {
                 this.incomingQueue.chunks.length = 0;
                 console.error("Bad stream detected in header.");
                 return false;
             }
+
+            if (!ret) {
+                return false;
+            }
+
             const [header, data]: [Header, Buffer] = ret;
 
             const inMessage: InMessage = {
