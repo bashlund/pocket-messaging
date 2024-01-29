@@ -16,9 +16,15 @@ import {EVENTS as SOCKETFACTORY_EVENTS} from "pocket-sockets";
 export const DEFAULT_PING_INTERVAL = 10000;  // Milliseconds.
 
 /**
- * A single message cannot exceed 65535 bytes in total.
+ * A single message cannot exceed 67 KiB in total for its payload.
+ *
+ * 67 KiB allows the sender to send a payload of 64 KiB with plenty
+ * of space left for its overhead, and 64 KiB is typically a
+ * fitting payload to deal with when reading/storing data.
+ *
+ * Actual data sent comes with some bytes added overhead.
  */
-export const MESSAGE_MAX_BYTES = 65535;
+export const MESSAGE_MAX_BYTES = 67 * 1024;
 
 export type SendReturn = {
     eventEmitter?: EventEmitter,
