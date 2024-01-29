@@ -84,7 +84,7 @@ export class Messaging {
     protected instanceId: string;
 
     /**
-     * @param the underlying socket to use.
+     * @param socket the underlying socket to use. Socket must be in binary mode.
      * @param pingInterval in milliseconds, set to send frequent pings on the socket to detect silent disconnects.
      */
     constructor(socket: ClientInterface, pingInterval?: number) {
@@ -512,8 +512,9 @@ export class Messaging {
         }
 
         if (this._isOpened) {
-            // Send empty message with an un-routable target.
-            this.send(Buffer.from([0]));
+            // Send empty ping message.
+            // Not expecting a reply on it.
+            this.send("_PING");
         }
 
         if (this.pingInterval > 0) {
@@ -691,6 +692,12 @@ export class Messaging {
                         // Ignore this message
                         return;
                     }
+
+                    if (inMessage.target.toString().toUpperCase() === "_PING") {
+                        // Ignore this message as it is an internal ping message.
+                        return;
+                    }
+
                     const routeEvent: RouteEvent = {
                         target: inMessage.target.toString(),
                         fromMsgId: inMessage.msgId,
