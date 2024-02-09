@@ -58,6 +58,10 @@ export class EncryptedClient implements ClientInterface {
         this.client.close();
     }
 
+    public isClosed(): boolean {
+        return this.client.isClosed();
+    }
+
     protected decryptData() {
         const ret = unbox(this.incomingData, this.incomingNonce, this.incomingKey);
 
