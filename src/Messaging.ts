@@ -19,6 +19,8 @@ import {
     SendReturn,
     ExpectingReply,
     DEFAULT_PING_INTERVAL,
+    MSG_ID_LENGTH,
+    PING_ROUTE,
 } from "./types";
 
 import {
@@ -257,7 +259,7 @@ export class Messaging {
             throw new Error("target length cannot exceed 255 bytes");
         }
 
-        const msgId = this.generateMsgId();
+        const msgId = Messaging.GenerateMsgId();
 
         const expectingReply = timeout > -1 ?
             (stream ? ExpectingReply.MULTIPLE : ExpectingReply.SINGLE) : ExpectingReply.NONE;
@@ -333,8 +335,8 @@ export class Messaging {
         return Date.now();
     }
 
-    protected generateMsgId(): Buffer {
-        const msgId = Buffer.from(crypto.randomBytes(4));
+    public static GenerateMsgId(): Buffer {
+        const msgId = Buffer.from(crypto.randomBytes(MSG_ID_LENGTH));
         return msgId;
     }
 
@@ -345,11 +347,11 @@ export class Messaging {
         if (header.target.length > 255) {
             throw new Error("Target length cannot exceed 255 bytes");
         }
-        if (header.msgId.length !== 4) {
-            throw new Error("msgId length must be exactly 4 bytes long");
+        if (header.msgId.length !== MSG_ID_LENGTH) {
+            throw new Error(`msgId length must be exactly ${MSG_ID_LENGTH} bytes long`);
         }
 
-        const headerLength = 1 + 4 + 1 + 4 + 1 + header.target.length;
+        const headerLength = 1 + 4 + 1 + MSG_ID_LENGTH + 1 + header.target.length;
         const totalLength = headerLength + header.dataLength;
 
         const buffer = Buffer.alloc(headerLength);
@@ -387,8 +389,8 @@ export class Messaging {
 
         const config = buffer.readUInt8(pos);
         pos++;
-        const msgId = buffer.slice(pos, pos + 4);
-        pos = pos + 4;
+        const msgId = buffer.slice(pos, pos + MSG_ID_LENGTH);
+        pos = pos + MSG_ID_LENGTH;
         const targetLength = buffer.readUInt8(pos);
         pos++;
         const target = buffer.slice(pos, pos + targetLength);
@@ -514,7 +516,7 @@ export class Messaging {
         if (this._isOpened) {
             // Send empty ping message.
             // Not expecting a reply on it.
-            this.send("_PING");
+            this.send(PING_ROUTE);
         }
 
         if (this.pingInterval > 0) {
@@ -693,7 +695,7 @@ export class Messaging {
                         return;
                     }
 
-                    if (inMessage.target.toString().toUpperCase() === "_PING") {
+                    if (inMessage.target.toString().toLowerCase() === PING_ROUTE.toLowerCase()) {
                         // Ignore this message as it is an internal ping message.
                         return;
                     }

@@ -15,6 +15,11 @@ import {EVENTS as SOCKETFACTORY_EVENTS} from "pocket-sockets";
 
 export const DEFAULT_PING_INTERVAL = 10000;  // Milliseconds.
 
+/** Msg ID length in bytes. */
+export const MSG_ID_LENGTH = 4;
+
+export const PING_ROUTE = "_ping";
+
 /**
  * A single message cannot exceed 67 KiB in total for its payload.
  *
