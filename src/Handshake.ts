@@ -439,7 +439,8 @@ export async function HandshakeAsClient(
     serverLongtermPk: Buffer,
     discriminator: Buffer,
     clientData?: Buffer,
-    maxServerDataSize: number = 2048): Promise<HandshakeResult> {
+    maxServerDataSize: number = 2048,
+    timeout: number = 3000): Promise<HandshakeResult> {
 
     await sodium.ready;
 
@@ -455,7 +456,7 @@ export async function HandshakeAsClient(
     client.send(msg1);
 
     // First response from server (message 2)
-    const msg2 = await new ByteSize(client).read(65);
+    const msg2 = await new ByteSize(client).read(65, timeout);
     const [difficulty, serverEphemeralPk] = verifyMessage2(msg2, discriminator);
 
     const nonce = CalculateNonce(difficulty.readUInt8(0), serverEphemeralPk);
@@ -472,13 +473,13 @@ export async function HandshakeAsClient(
     const sharedSecret_Ab = clientSharedSecret_Ab(clientLongtermSk, serverEphemeralPk);
 
     // Wait for second response from server (message 4)
-    const lengthPrefix = await new ByteSize(client).read(2);
+    const lengthPrefix = await new ByteSize(client).read(2, timeout);
     const length = lengthPrefix.readUInt16BE(0);
     if (length - 64 > maxServerDataSize) {
         throw new Error("Server data length too big");
     }
 
-    const msg4_ciphertext = await new ByteSize(client).read(length);
+    const msg4_ciphertext = await new ByteSize(client).read(length, timeout);
     const msg4 = Buffer.concat([lengthPrefix, msg4_ciphertext]);
 
     const serverData = verifyMessage4(msg4, detachedSigA, clientLongtermPk, serverLongtermPk, discriminator, sharedSecret_ab, sharedSecret_aB, sharedSecret_Ab);
@@ -515,10 +516,11 @@ export async function HandshakeAsServer(
     serverLongtermSk: Buffer,
     serverLongtermPk: Buffer,
     discriminator: Buffer,
-    allowedClientKey?: ((clientLongtermPk: Buffer) => boolean) | Buffer[],
+    allowedClientKeys?: ((clientLongtermPk: Buffer) => boolean) | Buffer[],
     serverData?: Buffer,
     difficulty: number = 0,
-    maxClientDataSize: number = 2048): Promise<HandshakeResult> {
+    maxClientDataSize: number = 2048,
+    timeout: number = 3000): Promise<HandshakeResult> {
 
     if (difficulty > 8) {
         // We support 8 nibbles of nonce.
@@ -535,7 +537,7 @@ export async function HandshakeAsServer(
     const serverEphemeralSk = serverEphemeralKeys.secretKey;
 
     // Wait for first message from client (message 1)
-    const msg1 = await new ByteSize(client).read(65);
+    const msg1 = await new ByteSize(client).read(65, timeout);
     const clientEphemeralPk = verifyMessage1(msg1, discriminator);
 
     // Send first message from server (message 2)
@@ -546,13 +548,13 @@ export async function HandshakeAsServer(
     const sharedSecret_aB = serverSharedSecret_aB(serverLongtermSk, clientEphemeralPk);
 
     // Wait for second message from client (message 3)
-    const lengthPrefix = await new ByteSize(client).read(2, 3000 + difficulty * 30000);
+    const lengthPrefix = await new ByteSize(client).read(2, timeout + difficulty * 30000);
     const length = lengthPrefix.readUInt16BE(0);
     if (length - 100 > maxClientDataSize) {
         throw new Error("Client data length too big");
     }
 
-    const msg3_ciphertext = await new ByteSize(client).read(length);
+    const msg3_ciphertext = await new ByteSize(client).read(length, timeout);
     const msg3 = Buffer.concat([lengthPrefix, msg3_ciphertext]);
 
     const [nonce, clientLongtermPk, detachedSigA, clientData] = verifyMessage3(msg3, serverLongtermPk, discriminator, sharedSecret_ab, sharedSecret_aB);
@@ -562,14 +564,14 @@ export async function HandshakeAsServer(
     }
 
     // Verify permissioned handshake for client longterm pk
-    if (allowedClientKey) {
-        if (typeof(allowedClientKey) === "function") {
-            if (!allowedClientKey(clientLongtermPk)) {
+    if (allowedClientKeys) {
+        if (typeof(allowedClientKeys) === "function") {
+            if (!allowedClientKeys(clientLongtermPk)) {
                 throw new Error(`Client longterm pk (${clientLongtermPk.toString("hex")} not allowed by function, IP: ${client.getRemoteAddress()}`);
             }
         }
-        else if (Array.isArray(allowedClientKey)) {
-            if (!allowedClientKey.find( (pk) => Equals(pk, clientLongtermPk) )) {
+        else if (Array.isArray(allowedClientKeys)) {
+            if (!allowedClientKeys.find( (pk) => Equals(pk, clientLongtermPk) )) {
                 throw new Error(`Client longterm pk (${clientLongtermPk.toString("hex")}) not in list of allowed public keys, IP: ${client.getRemoteAddress()}`);
             }
         }
@@ -578,7 +580,7 @@ export async function HandshakeAsServer(
         }
     }
     else {
-        // WARNING: no allowedClientKey means to allow all clients connecting
+        // WARNING: no allowedClientKeys means to allow all clients connecting
         // Fall through
     }
 
