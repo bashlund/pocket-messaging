@@ -48,11 +48,11 @@ export class MessagingSpec {
         expect.toBeTrue(this.messaging1.isOpen());
 
         //@ts-ignore protected function
-        const msgId1 = this.messaging1.generateMsgId();
+        const msgId1 = Messaging.GenerateMsgId();
         expect.toBeTrue(msgId1.length === 4);
 
         //@ts-ignore protected function
-        const msgId2 = this.messaging1.generateMsgId();
+        const msgId2 = Messaging.GenerateMsgId();
         expect.toBeTrue(msgId2.length === 4);
         expect.toBeTrue(msgId1.compare(msgId2) !== 0);
 
@@ -434,7 +434,7 @@ export class MessagingEncodeHeader {
         let messaging = new Messaging(socket, 0);
         assert.throws(function() {
             //@ts-ignore protected function
-            const id = messaging.generateMsgId();
+            const id = Messaging.GenerateMsgId();
             const header: Header = {
                 version: 0,
                 target: Buffer.alloc(256).fill(256),
@@ -473,7 +473,7 @@ export class MessagingDecodeHeader {
         let messaging = new Messaging(socket, 0);
         assert.throws(function() {
             //@ts-ignore protected function
-            const id = messaging.generateMsgId();
+            const id = Messaging.GenerateMsgId();
             const header: Header = {
                 version: 0,
                 target: Buffer.alloc(255).fill(255),
@@ -495,7 +495,7 @@ export class MessagingDecodeHeader {
         let messaging = new Messaging(socket, 0);
         assert.throws(function() {
             //@ts-ignore protected function
-            const id = messaging.generateMsgId();
+            const id = Messaging.GenerateMsgId();
             const header: Header = {
                 version: 0,
                 target: Buffer.alloc(255).fill(255),
