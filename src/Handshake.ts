@@ -487,8 +487,6 @@ export async function HandshakeAsClient(
     const [clientToServerKey, clientNonce] = calcClientToServerKey(discriminator, sharedSecret_ab, sharedSecret_aB, sharedSecret_Ab, serverLongtermPk, serverEphemeralPk);
     const [serverToClientKey, serverNonce] = calcServerToClientKey(discriminator, sharedSecret_ab, sharedSecret_aB, sharedSecret_Ab, clientLongtermPk, clientEphemeralPk);
 
-    const sessionId = hashFn(sharedSecret_ab);
-
     const handshakeParams = {
         longtermPk: clientLongtermPk,
         peerLongtermPk: serverLongtermPk,
@@ -497,7 +495,6 @@ export async function HandshakeAsClient(
         serverToClientKey,
         serverNonce,
         peerData: serverData,
-        sessionId,
     };
 
     return handshakeParams;
@@ -592,7 +589,6 @@ export async function HandshakeAsServer(
 
     const [clientToServerKey, clientNonce] = calcClientToServerKey(discriminator, sharedSecret_ab, sharedSecret_aB, sharedSecret_Ab, serverLongtermPk, serverEphemeralPk);
     const [serverToClientKey, serverNonce] = calcServerToClientKey(discriminator, sharedSecret_ab, sharedSecret_aB, sharedSecret_Ab, clientLongtermPk, clientEphemeralPk);
-    const sessionId = hashFn(sharedSecret_ab);
 
     const handshakeParams = {
         longtermPk: serverLongtermPk,
@@ -602,7 +598,6 @@ export async function HandshakeAsServer(
         serverToClientKey,
         serverNonce,
         peerData: clientData,
-        sessionId,
     };
 
     // Done

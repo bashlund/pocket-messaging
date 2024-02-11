@@ -174,7 +174,6 @@ export type HandshakeResult = {
     serverToClientKey: Buffer,  // box key
     serverNonce: Buffer,        // box nonce
     peerData: Buffer,           // arbitrary data provided by peer
-    sessionId: Buffer,          // A mutual 32 byte session ID which can be used. Same for client and server. Derived by the hashing of a shared secret. TODO?
 };
 
 export type KeyPair = {
