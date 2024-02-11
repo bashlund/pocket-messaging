@@ -5,6 +5,7 @@ import {
     SocketFactoryStats,
     SocketFactoryInterface,
     ClientInterface,
+    WrappedClientInterface,
 } from "pocket-sockets";
 
 import {
@@ -261,9 +262,12 @@ export const EVENTS = {
 
 /**
  * Event emitted when client is successfully handshaked and setup for encryption.
- * Note that the returned Messaging object first needs to be .open()'d to be ready for communication.
+ * The client returned is the original client socket. 
+ * The wrappedClient is prepared for being used with encryption but it must be called
+ * with await init() before using, if using.
  */
-export type HandshakeCallback = (e: {messaging: Messaging, isServer: boolean, handshakeResult: HandshakeResult}) => void;
+export type HandshakeCallback = (e: {isServer: boolean, client: ClientInterface,
+    wrappedClient: WrappedClientInterface, handshakeResult: HandshakeResult}) => void;
 
 /** Event emitted when client could not handshake. */
 export type HandshakeErrorCallback = (e: {error: Error, client: ClientInterface}) => void;
