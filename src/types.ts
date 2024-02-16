@@ -174,6 +174,7 @@ export type HandshakeResult = {
     clientNonce: Buffer,        // box nonce
     serverToClientKey: Buffer,  // box key
     serverNonce: Buffer,        // box nonce
+    clockDiff: number,          // diff in ms between local peer and remote peer (local-remote)
     peerData: Buffer,           // arbitrary data provided by peer
 };
 

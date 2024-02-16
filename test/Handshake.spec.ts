@@ -39,8 +39,9 @@ export class HandshakeSpec {
             const allowedClientKey: Buffer[] = [this.keyPairClient.publicKey];
             const serverData = Buffer.from("abbbaaa");
             try {
-                const ret = await HandshakeAsServer(this.socket2, this.keyPairServer.secretKey, this.keyPairServer.publicKey, discriminator, allowedClientKey, serverData);
-                //console.log("SERVER HANDSHAKE", );
+                const ret = await HandshakeAsServer(this.socket2, this.keyPairServer.secretKey, this.keyPairServer.publicKey, discriminator, allowedClientKey, serverData, 100);
+                console.log("SERVER HANDSHAKE", );
+                assert(ret.clockDiff < -890);
                 //console.log(`clientLongtermPk: ${ret[0].toString("hex")}`);
                 //console.log(`clientToServerKey: ${ret[1].toString("hex")}`);
                 //console.log(`clientNonce: ${ret[2].toString("hex")}`);
@@ -55,8 +56,9 @@ export class HandshakeSpec {
         });
 
         try {
-            const ret = await HandshakeAsClient(this.socket1, this.keyPairClient.secretKey, this.keyPairClient.publicKey, this.keyPairServer.publicKey, discriminator, clientData);
+            const ret = await HandshakeAsClient(this.socket1, this.keyPairClient.secretKey, this.keyPairClient.publicKey, this.keyPairServer.publicKey, discriminator, clientData, 1000);
             //console.log("CLIENT HANDSHAKE",);
+            assert(ret.clockDiff >= 890);
             //console.log(`clientToServerKey: ${ret[0].toString("hex")}`);
             //console.log(`clientNonce: ${ret[1].toString("hex")}`);
             //console.log(`serverToClientKey: ${ret[2].toString("hex")}`);
