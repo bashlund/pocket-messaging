@@ -8,10 +8,6 @@ import {
     WrappedClientInterface,
 } from "pocket-sockets";
 
-import {
-    Messaging,
-} from "./Messaging";
-
 import {EVENTS as SOCKETFACTORY_EVENTS} from "pocket-sockets";
 
 export const DEFAULT_PING_INTERVAL = 10000;  // Milliseconds.
