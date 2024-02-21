@@ -13,10 +13,6 @@ import {
 } from "./types";
 
 import {
-    Messaging,
-} from "./Messaging";
-
-import {
     HandshakeAsServer,
     HandshakeAsClient,
 } from "./Handshake";
@@ -75,7 +71,11 @@ export class HandshakeFactory extends SocketFactory implements HandshakeFactoryI
             let encryptedClient: EncryptedClient | undefined;
 
             if (e.isServer) {
-                handshakeResult = await HandshakeAsServer(e.client, this.handshakeFactoryConfig.keyPair.secretKey, this.handshakeFactoryConfig.keyPair.publicKey, this.handshakeFactoryConfig.discriminator, this.handshakeFactoryConfig.allowedClients, peerData);
+                handshakeResult = await HandshakeAsServer(e.client,
+                    this.handshakeFactoryConfig.keyPair.secretKey,
+                    this.handshakeFactoryConfig.keyPair.publicKey,
+                    this.handshakeFactoryConfig.discriminator,
+                    this.handshakeFactoryConfig.allowedClients, peerData);
 
                 encryptedClient = new EncryptedClient(e.client,
                     handshakeResult.serverToClientKey,
@@ -83,8 +83,6 @@ export class HandshakeFactory extends SocketFactory implements HandshakeFactoryI
                     handshakeResult.clientToServerKey,
                     handshakeResult.clientNonce,
                     handshakeResult.peerLongtermPk);
-
-                await encryptedClient.init();
             }
             else {
                 if (!this.handshakeFactoryConfig.serverPublicKey) {
@@ -92,7 +90,11 @@ export class HandshakeFactory extends SocketFactory implements HandshakeFactoryI
                     return;
                 }
 
-                handshakeResult = await HandshakeAsClient(e.client, this.handshakeFactoryConfig.keyPair.secretKey, this.handshakeFactoryConfig.keyPair.publicKey, this.handshakeFactoryConfig.serverPublicKey, this.handshakeFactoryConfig.discriminator, peerData);
+                handshakeResult = await HandshakeAsClient(e.client,
+                    this.handshakeFactoryConfig.keyPair.secretKey,
+                    this.handshakeFactoryConfig.keyPair.publicKey,
+                    this.handshakeFactoryConfig.serverPublicKey,
+                    this.handshakeFactoryConfig.discriminator, peerData);
 
                 encryptedClient = new EncryptedClient(e.client,
                     handshakeResult.clientToServerKey,
@@ -100,36 +102,36 @@ export class HandshakeFactory extends SocketFactory implements HandshakeFactoryI
                     handshakeResult.serverToClientKey,
                     handshakeResult.serverNonce,
                     handshakeResult.peerLongtermPk);
-
-                await encryptedClient.init();
             }
 
             if (!handshakeResult || !encryptedClient) {
                 return;
             }
 
-            const messaging = new Messaging(encryptedClient, this.handshakeFactoryConfig.pingInterval);
-
             const publicKeyStr = handshakeResult.peerLongtermPk.toString("hex");
             if (this.checkClientsOverflow(publicKeyStr)) {
-                messaging.close();
                 this.triggerEvent(EVENTS.CLIENT_REFUSE.name,
-                                  {reason: EVENTS.CLIENT_REFUSE.reason.PUBLICKEY_OVERFLOW, key: handshakeResult.peerLongtermPk});
+                    {reason: EVENTS.CLIENT_REFUSE.reason.PUBLICKEY_OVERFLOW,
+                        key: handshakeResult.peerLongtermPk});
+
                 return;
             }
+
             this.increaseClientsCounter(publicKeyStr);
+
             e.client.onClose( () => {
                 this.decreaseClientsCounter(publicKeyStr);
             });
 
-            this.triggerEvent(EVENTS.HANDSHAKE.name, {messaging, isServer: e.isServer, handshakeResult});
+            this.triggerEvent(EVENTS.HANDSHAKE.name, {isServer: e.isServer, handshakeResult,
+                client: e.client, wrappedClient: encryptedClient});
         }
         catch(error) {
-            if (typeof error === "string") {
-                error = new Error(error);
-            }
             this.triggerEvent(EVENTS.HANDSHAKE_ERROR.name, {error, client: e.client});
-            this.triggerEvent(EVENTS.ERROR.name, {eventName: EVENTS.HANDSHAKE_ERROR, e: {error, client: e.client}});
+
+            this.triggerEvent(EVENTS.ERROR.name, {eventName: EVENTS.HANDSHAKE_ERROR,
+                e: {error, client: e.client}});
+
             e.client.close();
         }
     }

@@ -5,20 +5,28 @@ import {
     SocketFactoryStats,
     SocketFactoryInterface,
     ClientInterface,
+    WrappedClientInterface,
 } from "pocket-sockets";
-
-import {
-    Messaging,
-} from "./Messaging";
 
 import {EVENTS as SOCKETFACTORY_EVENTS} from "pocket-sockets";
 
 export const DEFAULT_PING_INTERVAL = 10000;  // Milliseconds.
 
+/** Msg ID length in bytes. */
+export const MSG_ID_LENGTH = 4;
+
+export const PING_ROUTE = "_ping";
+
 /**
- * A single message cannot exceed 65535 bytes in total.
+ * A single message cannot exceed 67 KiB in total for its payload.
+ *
+ * 67 KiB allows the sender to send a payload of 64 KiB with plenty
+ * of space left for its overhead, and 64 KiB is typically a
+ * fitting payload to deal with when reading/storing data.
+ *
+ * Actual data sent comes with some bytes added overhead.
  */
-export const MESSAGE_MAX_BYTES = 65535;
+export const MESSAGE_MAX_BYTES = 67 * 1024;
 
 export type SendReturn = {
     eventEmitter?: EventEmitter,
@@ -40,7 +48,7 @@ export enum ExpectingReply {
     NONE = 0,
     SINGLE = 1,
     MULTIPLE = 2,
-};
+}
 
 /**
  * Bytes:
@@ -100,8 +108,7 @@ export type ReplyEvent = {
     expectingReply: number
 };
 
-export type TimeoutEvent = {
-};
+export type TimeoutEvent = Record<string, never>;  // Fancy speak for empty object.
 
 export type ErrorEvent = {
     error: string,
@@ -163,8 +170,8 @@ export type HandshakeResult = {
     clientNonce: Buffer,        // box nonce
     serverToClientKey: Buffer,  // box key
     serverNonce: Buffer,        // box nonce
+    clockDiff: number,          // diff in ms between local peer and remote peer (local-remote)
     peerData: Buffer,           // arbitrary data provided by peer
-    sessionId: Buffer,          // A mutual 32 byte session ID which can be used. Same for client and server. Derived by the hashing of a shared secret.
 };
 
 export type KeyPair = {
@@ -252,9 +259,12 @@ export const EVENTS = {
 
 /**
  * Event emitted when client is successfully handshaked and setup for encryption.
- * Note that the returned Messaging object first needs to be .open()'d to be ready for communication.
+ * The client returned is the original client socket. 
+ * The wrappedClient is prepared for being used with encryption but it must be called
+ * with await init() before using, if using.
  */
-export type HandshakeCallback = (e: {messaging: Messaging, isServer: boolean, handshakeResult: HandshakeResult}) => void;
+export type HandshakeCallback = (e: {isServer: boolean, client: ClientInterface,
+    wrappedClient: WrappedClientInterface, handshakeResult: HandshakeResult}) => void;
 
 /** Event emitted when client could not handshake. */
 export type HandshakeErrorCallback = (e: {error: Error, client: ClientInterface}) => void;

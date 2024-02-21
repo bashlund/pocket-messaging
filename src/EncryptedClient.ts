@@ -2,52 +2,41 @@ import {box, unbox, init} from "./Crypto";
 
 import {
     ClientInterface,
-    SocketErrorCallback,
     SocketDataCallback,
-    SocketConnectCallback,
-    SocketCloseCallback,
+    WrappedClient,
 } from "pocket-sockets";
 
 /**
  * Wrap an already connected and handshooked socket client as encrypted.
  *
  */
-export class EncryptedClient implements ClientInterface {
-    protected handlers: {[name: string]: Function[]} = {};
+export class EncryptedClient extends WrappedClient {
     protected incomingData: Buffer;
 
-    constructor(protected client: ClientInterface,
+    constructor(client: ClientInterface,
             protected outgoingKey: Buffer,
             protected outgoingNonce: Buffer,
             protected incomingKey: Buffer,
             protected incomingNonce: Buffer,
             protected peerPublicKey: Buffer) {
 
+        super(client);
+
         this.incomingData = Buffer.alloc(0);
     }
 
     public async init() {
+        await super.init();
+
         await init();  // Init sodium
     }
 
-    public connect() {
-        throw new Error("The EncryptedSocket's underlaying socket should already have been connected");
-    }
-
-    public unRead(data: Buffer) {
-        throw new Error("unRead function not available in EncryptedSocket");
+    public unRead(data: Buffer) {  //eslint-disable-line @typescript-eslint/no-unused-vars
+        throw new Error("unRead function not available in EncryptedClient");
     }
 
     public getPeerPublicKey(): Buffer {
         return this.peerPublicKey;
-    }
-
-    public sendString(data: string) {
-        this.send(Buffer.from(data));
-    }
-
-    public close() {
-        this.client.close();
     }
 
     protected decryptData() {
@@ -72,20 +61,17 @@ export class EncryptedClient implements ClientInterface {
     }
 
     public send(data: Buffer) {
-        // encrypt data
-        const [encryptedData, nextNonce] = box(data, this.outgoingNonce, this.outgoingKey);
+        if (Buffer.isBuffer(data)) {
+            // encrypt data
+            const [encryptedData, nextNonce] = box(data, this.outgoingNonce, this.outgoingKey);
 
-        this.outgoingNonce = nextNonce;
+            this.outgoingNonce = nextNonce;
 
-        this.client.send(encryptedData);
-    }
-
-    public onError(fn: SocketErrorCallback) {
-        this.client.onError(fn);
-    }
-
-    public offError(fn: SocketErrorCallback) {
-        this.client.offError(fn);
+            this.client.send(encryptedData);
+        }
+        else {
+            throw new Error("EncryptedClient does not work with text data");
+        }
     }
 
     public onData(fn: SocketDataCallback) {
@@ -104,62 +90,13 @@ export class EncryptedClient implements ClientInterface {
         }
     }
 
-    protected handleOnData = async (data: Buffer) => {
-        this.incomingData = Buffer.concat([this.incomingData, data]);
-        this.decryptData();
+    protected handleOnData = async (data: Buffer | string) => {
+        if (Buffer.isBuffer(data)) {
+            this.incomingData = Buffer.concat([this.incomingData, data]);
+            this.decryptData();
+        }
+        else {
+            throw new Error("EncryptedClient does not work with text data");
+        }
     };
-
-    public onConnect(fn: SocketConnectCallback) {
-        this.client.onConnect(fn);
-    }
-
-    public offConnect(fn: SocketConnectCallback) {
-        this.client.offConnect(fn);
-    }
-
-    public onClose(fn: SocketCloseCallback) {
-        this.client.onClose(fn);
-    }
-
-    public offClose(fn: SocketCloseCallback) {
-        this.client.offClose(fn);
-    }
-
-    public getLocalAddress(): string | undefined {
-        return this.client.getLocalAddress();
-    }
-
-    public getRemoteAddress(): string | undefined {
-        return this.client.getRemoteAddress();
-    }
-
-    public getRemotePort(): number | undefined {
-        return this.client.getRemotePort();
-    }
-
-    public getLocalPort(): number | undefined {
-        return this.client.getLocalPort();
-    }
-
-    public getClient(): ClientInterface {
-        return this.client;
-    }
-
-    protected hookEvent(type: string, callback: Function) {
-        const cbs = this.handlers[type] || [];
-        this.handlers[type] = cbs;
-        cbs.push(callback);
-    }
-
-    protected unhookEvent(type: string, callback: Function) {
-        const cbs = (this.handlers[type] || []).filter( (cb: Function) => callback !== cb );
-        this.handlers[type] = cbs;
-    }
-
-    protected triggerEvent(type: string, ...args: any) {
-        const cbs = this.handlers[type] || [];
-        cbs.forEach( (callback: Function) => {
-            callback(...args);
-        });
-    }
 }

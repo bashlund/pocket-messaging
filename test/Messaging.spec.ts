@@ -48,11 +48,11 @@ export class MessagingSpec {
         expect.toBeTrue(this.messaging1.isOpen());
 
         //@ts-ignore protected function
-        const msgId1 = this.messaging1.generateMsgId();
+        const msgId1 = Messaging.GenerateMsgId();
         expect.toBeTrue(msgId1.length === 4);
 
         //@ts-ignore protected function
-        const msgId2 = this.messaging1.generateMsgId();
+        const msgId2 = Messaging.GenerateMsgId();
         expect.toBeTrue(msgId2.length === 4);
         expect.toBeTrue(msgId1.compare(msgId2) !== 0);
 
@@ -64,11 +64,11 @@ export class MessagingSpec {
             config: 2
         };
         //@ts-ignore protected function
-        const headerBuffer = this.messaging1.encodeHeader(header);
+        const headerBuffer = Messaging.EncodeHeader(header);
         expect.toBeTrue(headerBuffer.length === 11 + header.target.length);
         const messageBuffer = Buffer.concat([headerBuffer, Buffer.alloc(33).fill(33)]);
         //@ts-ignore protected function
-        const ret = this.messaging1.decodeHeader(messageBuffer);
+        const ret = Messaging.DecodeHeader(messageBuffer);
         expect.toBeTrue(ret !== undefined);
         if (!ret) return; //@ts-chillax trust me on this one
         const [header2, data2] = ret;
@@ -185,8 +185,8 @@ export class MessagingConstructor {
         let messaging = new Messaging(socket, 0);
         assert(Object.keys(messaging.pendingReply).length == 0);
 
-        assert(!messaging.isOpened);
-        assert(!messaging.isClosed);
+        assert(!messaging.isOpened());
+        assert(!messaging.isClosed());
 
         assert(messaging.dispatchLimit == -1);
         assert(messaging.isBusyOut == 0);
@@ -246,10 +246,10 @@ export class MessagingOpen {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(function() {
-            messaging.isClosed = true;
-            assert(messaging.isOpened == false);
+            messaging._isClosed = true;
+            assert(messaging.isOpened() == false);
             messaging.open();
-            assert(messaging.isOpened == false);
+            assert(messaging.isOpened() == false);
         });
     }
 
@@ -258,7 +258,7 @@ export class MessagingOpen {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(function() {
-            messaging.isOpened = true;
+            messaging._isOpened = true;
             let flag = false;
             // Expected to be called only on success
             // @ts-ignore: protected method
@@ -266,7 +266,7 @@ export class MessagingOpen {
                 flag = true;
             };
             messaging.open();
-            assert(messaging.isOpened == true);
+            assert(messaging.isOpened() == true);
             assert(flag == false); // No change
         });
     }
@@ -282,10 +282,10 @@ export class MessagingOpen {
             messaging.checkTimeouts = function() {
                 flag = true;
             };
-            assert(messaging.isOpened == false);
+            assert(messaging.isOpened() == false);
             assert(flag == false);
             messaging.open();
-            assert(messaging.isOpened == true);
+            assert(messaging.isOpened() == true);
             // @ts-ignore: expected to be modified by custom checkTimeouts
             assert(flag == true);
         });
@@ -315,12 +315,12 @@ export class MessagingClose {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(function() {
-            assert(messaging.isClosed == false);
-            assert(messaging.isOpened == false);
+            assert(messaging.isClosed() == false);
+            assert(messaging.isOpened() == false);
             messaging.open();
-            assert(messaging.isOpened == true);
+            assert(messaging.isOpened() == true);
             messaging.close();
-            assert(messaging.isClosed == true);
+            assert(messaging.isClosed() == true);
         });
     }
 }
@@ -360,7 +360,7 @@ export class MessagingSend {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(function() {
-            assert(messaging.isOpened == false);
+            assert(messaging.isOpened() == false);
             assert(Object.keys(messaging.pendingReply).length == 0);
             messaging.send(Buffer.from(""));
             assert(Object.keys(messaging.pendingReply).length == 0);
@@ -372,7 +372,7 @@ export class MessagingSend {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(function() {
-            messaging.isClosed = true;
+            messaging._isClosed = true;
             assert(Object.keys(messaging.pendingReply).length == 0);
             messaging.send(Buffer.from(""));
             assert(Object.keys(messaging.pendingReply).length == 0);
@@ -385,8 +385,8 @@ export class MessagingSend {
         let messaging = new Messaging(socket, 0);
         assert.throws(function() {
             assert(Object.keys(messaging.pendingReply).length == 0);
-            messaging.isOpened = true;
-            messaging.isClosed = false;
+            messaging._isOpened = true;
+            messaging._isClosed = false;
             messaging.send(Buffer.alloc(256).fill(256));
             assert(Object.keys(messaging.pendingReply).length == 0);
         }, /target length cannot exceed 255 bytes/);
@@ -399,8 +399,8 @@ export class MessagingSend {
         assert.doesNotThrow(function() {
             assert(messaging.outgoingQueue.chunks.length == 0);
             assert(Object.keys(messaging.pendingReply).length == 0);
-            messaging.isOpened = true;
-            messaging.isClosed = false;
+            messaging._isOpened = true;
+            messaging._isClosed = false;
             const replyStatus = messaging.send(Buffer.alloc(255).fill(255));
             assert(messaging.outgoingQueue.chunks.length == 1 + 1);
             assert(Object.keys(messaging.pendingReply).length == 0);
@@ -416,8 +416,8 @@ export class MessagingSend {
         assert.doesNotThrow(function() {
             assert(messaging.outgoingQueue.chunks.length == 0);
             assert(Object.keys(messaging.pendingReply).length == 0);
-            messaging.isOpened = true;
-            messaging.isClosed = false;
+            messaging._isOpened = true;
+            messaging._isClosed = false;
             const replyStatus = messaging.send(Buffer.alloc(255).fill(255), undefined, 1);
             assert(messaging.outgoingQueue.chunks.length == 1 + 1);
             assert(Object.keys(messaging.pendingReply).length == 1);
@@ -434,7 +434,7 @@ export class MessagingEncodeHeader {
         let messaging = new Messaging(socket, 0);
         assert.throws(function() {
             //@ts-ignore protected function
-            const id = messaging.generateMsgId();
+            const id = Messaging.GenerateMsgId();
             const header: Header = {
                 version: 0,
                 target: Buffer.alloc(256).fill(256),
@@ -443,8 +443,8 @@ export class MessagingEncodeHeader {
                 config: 2
             };
             //@ts-ignore protected function
-            messaging.encodeHeader(header);
-        }, /Target length cannot exceed 255 bytes./);
+            Messaging.EncodeHeader(header);
+        }, /Target length cannot exceed 255 bytes/);
     }
 
     @Test()
@@ -460,8 +460,8 @@ export class MessagingEncodeHeader {
                 config: 2
             };
             //@ts-ignore protected function
-            messaging.encodeHeader(header);
-        }, /msgId length must be exactly 4 bytes long./);
+            Messaging.EncodeHeader(header);
+        }, /msgId length must be exactly 4 bytes long/);
     }
 }
 
@@ -473,7 +473,7 @@ export class MessagingDecodeHeader {
         let messaging = new Messaging(socket, 0);
         assert.throws(function() {
             //@ts-ignore protected function
-            const id = messaging.generateMsgId();
+            const id = Messaging.GenerateMsgId();
             const header: Header = {
                 version: 0,
                 target: Buffer.alloc(255).fill(255),
@@ -482,11 +482,11 @@ export class MessagingDecodeHeader {
                 config: 2
             };
             //@ts-ignore protected function
-            let encodedHeader = messaging.encodeHeader(header);
+            let encodedHeader = Messaging.EncodeHeader(header);
             encodedHeader.writeUInt8(255);
             //@ts-ignore protected function
-            messaging.decodeHeader(encodedHeader);
-        }, /Unexpected version nr. Only supporting version 0./);
+            Messaging.DecodeHeader(encodedHeader);
+        }, /Unexpected version nr, only supporting version 0/);
     }
 
     @Test()
@@ -495,7 +495,7 @@ export class MessagingDecodeHeader {
         let messaging = new Messaging(socket, 0);
         assert.throws(function() {
             //@ts-ignore protected function
-            const id = messaging.generateMsgId();
+            const id = Messaging.GenerateMsgId();
             const header: Header = {
                 version: 0,
                 target: Buffer.alloc(255).fill(255),
@@ -504,11 +504,11 @@ export class MessagingDecodeHeader {
                 config: 2
             };
             //@ts-ignore protected function
-            let encodedHeader = messaging.encodeHeader(header);
+            let encodedHeader = Messaging.EncodeHeader(header);
             encodedHeader.writeUInt32LE(234, 1);
             //@ts-ignore protected function
-            messaging.decodeHeader(encodedHeader);
-        }, /Mismatch in expected length and provided buffer length./);
+            Messaging.DecodeHeader(encodedHeader);
+        }, /Mismatch in expected length and provided buffer length/);
     }
 }
 
@@ -519,10 +519,10 @@ export class MessagingSocketClose {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(function() {
-            messaging.isClosed = true;
+            messaging._isClosed = true;
             //@ts-ignore protected function
             messaging.socketClose();
-            assert(messaging.isClosed == true);
+            assert(messaging.isClosed() == true);
         });
     }
 
@@ -537,10 +537,10 @@ export class MessagingSocketClose {
                 assert(type == EventType.CLOSE || type == EventType.ANY);
                 assert(arg);
             };
-            assert(messaging.isClosed == false);
+            assert(messaging.isClosed() == false);
             //@ts-ignore protected function
             messaging.socketClose();
-            assert(messaging.isClosed == true);
+            assert(messaging.isClosed() == true);
         });
     }
 }
@@ -689,7 +689,7 @@ export class MessagingAssembleIncoming {
                 return Buffer.from("");
             }
             //@ts-ignore protected function
-            messaging.decodeHeader = function() {
+            Messaging.DecodeHeader = function() {
                 return undefined;
             }
 
@@ -712,7 +712,7 @@ export class MessagingAssembleIncoming {
                 return Buffer.from("");
             }
             //@ts-ignore protected function
-            messaging.decodeHeader = function() {
+            Messaging.DecodeHeader = function() {
                 messaging.incomingQueue.chunks.length = 0;
                 return [{version: 0, target: "tgt", dataLength: 3, config: false}, Buffer.from("")];
             }
@@ -756,7 +756,7 @@ export class MessagingDispatchIncoming {
                 return Buffer.from("");
             }
             //@ts-ignore protected function
-            messaging.decodeHeader = function() {
+            Messaging.DecodeHeader = function() {
                 messaging.incomingQueue.chunks.length = 0;
                 return [{version: 0, target: Buffer.from("tgt"), dataLength: 3, config: false}, Buffer.from("")];
             }
@@ -785,7 +785,7 @@ export class MessagingDispatchIncoming {
                 return Buffer.from("");
             }
             //@ts-ignore protected function
-            messaging.decodeHeader = function() {
+            Messaging.DecodeHeader = function() {
                 messaging.incomingQueue.chunks.length = 0;
                 return [{version: 0, target: Buffer.from("tgt"), dataLength: 3, config: false}, Buffer.from("")];
             }
@@ -814,7 +814,7 @@ export class MessagingDispatchIncoming {
                 return Buffer.from("");
             }
             //@ts-ignore protected function
-            messaging.decodeHeader = function() {
+            Messaging.DecodeHeader = function() {
                 messaging.incomingQueue.chunks.length = 0;
                 return [{version: 0, target: Buffer.from("tgt"), dataLength: 3, config: false}, Buffer.from("")];
             }
@@ -879,8 +879,8 @@ export class MessagingEncryptOutgoing {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(async function() {
-            messaging.isOpened = true;
-            messaging.isClosed = false;
+            messaging._isOpened = true;
+            messaging._isClosed = false;
             const replyStatus = messaging.send(Buffer.alloc(255).fill(255));
             assert(messaging.outgoingQueue.chunks.length == 1 + 1);
         });
@@ -891,8 +891,8 @@ export class MessagingEncryptOutgoing {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(async function() {
-            messaging.isOpened = true;
-            messaging.isClosed = false;
+            messaging._isOpened = true;
+            messaging._isClosed = false;
             const outKey = Buffer.alloc(32);
             const outNonce = Buffer.alloc(24);
             const inKey = Buffer.alloc(32);
@@ -926,8 +926,8 @@ export class MessagingDispatchOutgoing {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(async function() {
-            messaging.isOpened = true;
-            messaging.isClosed = false;
+            messaging._isOpened = true;
+            messaging._isClosed = false;
             const outKey = Buffer.alloc(32);
             const outNonce = Buffer.alloc(24);
             const inKey = Buffer.alloc(32);
@@ -960,7 +960,7 @@ export class MessagingCheckTimeouts {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(async function() {
-            messaging.isOpened = false;
+            messaging._isOpened = false;
             //@ts-ignore: protected function
             messaging.checkTimeouts();
         });
@@ -971,7 +971,7 @@ export class MessagingCheckTimeouts {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(async function() {
-            messaging.isClosed = true;
+            messaging._isClosed = true;
             //@ts-ignore: protected function
             messaging.checkTimeouts();
         });
@@ -983,8 +983,8 @@ export class MessagingCheckTimeouts {
         let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(async function() {
             messaging.open();
-            assert(messaging.isOpened == true);
-            assert(messaging.isClosed == false);
+            assert(messaging.isOpened() == true);
+            assert(messaging.isClosed() == false);
             //@ts-ignore: protected function
             messaging.getTimeoutedPendingMessages = function() {
                 let messages: SentMessage[] = [];
@@ -1023,8 +1023,8 @@ export class MessagingGetTimeoutedPendingMessages {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(async function() {
-            messaging.isOpened = true;
-            messaging.isClosed = false;
+            messaging._isOpened = true;
+            messaging._isClosed = false;
             //@ts-ignore: protected function
             messaging.pendingReply["20"] = {
                 timestamp: 0,
@@ -1046,8 +1046,8 @@ export class MessagingGetTimeoutedPendingMessages {
         let [socket, _] = CreatePair();
         let messaging = new Messaging(socket, 0);
         assert.doesNotThrow(async function() {
-            messaging.isOpened = true;
-            messaging.isClosed = false;
+            messaging._isOpened = true;
+            messaging._isClosed = false;
             //@ts-ignore: protected function
             messaging.pendingReply["20"] = {
                 timestamp: 0,

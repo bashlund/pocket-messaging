@@ -19,13 +19,15 @@ import {
     SendReturn,
     ExpectingReply,
     DEFAULT_PING_INTERVAL,
+    MSG_ID_LENGTH,
+    PING_ROUTE,
 } from "./types";
 
 import {
     PocketConsole,
 } from "pocket-console";
 
-let console = PocketConsole({module: "Messaging"});
+const console = PocketConsole({module: "Messaging"});
 
 export class Messaging {
 
@@ -59,12 +61,12 @@ export class Messaging {
     /**
      * Set to true if we have opened.
      */
-    protected isOpened: boolean;
+    protected _isOpened: boolean;
 
     /**
      * Set to true if we have closed.
      */
-    protected isClosed: boolean;
+    protected _isClosed: boolean;
 
     /** ID of the timeout in use for ping. */
     protected pingTimeout: ReturnType<typeof setTimeout> | undefined;
@@ -84,14 +86,14 @@ export class Messaging {
     protected instanceId: string;
 
     /**
-     * @param the underlying socket to use.
+     * @param socket the underlying socket to use. Socket must be in binary mode.
      * @param pingInterval in milliseconds, set to send frequent pings on the socket to detect silent disconnects.
      */
     constructor(socket: ClientInterface, pingInterval?: number) {
         this.socket = socket;
         this.pendingReply = {};
-        this.isOpened = false;
-        this.isClosed = false;
+        this._isOpened = false;
+        this._isClosed = false;
         this.pingInterval = pingInterval ?? DEFAULT_PING_INTERVAL;
         this.dispatchLimit = -1;
         this.isBusyOut = 0;
@@ -153,15 +155,22 @@ export class Messaging {
     }
 
     /**
-     * Open this Messaging object for communication.
-     * Don't open it until you have hooked the event emitter.
+     * Open this Messaging for inbound data.
+     *
+     * Do not open it until you have hooked the event emitter
+     * to not loose any incoming data.
+     *
+     * It is technically allowed to send data before opening,
+     * but the Messaging should be opened very shortly after
+     * sending so that replies can come through and so that
+     * timeouts are processed properly.
      */
     public open() {
-        if (this.isOpened || this.isClosed) {
+        if (this._isOpened || this._isClosed) {
             return;
         }
 
-        this.isOpened = true;
+        this._isOpened = true;
 
         this.socket.onData(this.socketData);
 
@@ -173,7 +182,15 @@ export class Messaging {
     }
 
     public isOpen(): boolean {
-        return this.isOpened && !this.isClosed;
+        return this._isOpened && !this._isClosed;
+    }
+
+    public isOpened(): boolean {
+        return this._isOpened;
+    }
+
+    public isClosed(): boolean {
+        return this._isClosed;
     }
 
     /**
@@ -181,7 +198,7 @@ export class Messaging {
      *
      */
     public close() {
-        if (this.isClosed) {
+        if (this._isClosed) {
             return;
         }
         // Note the socket was already open when it was passed into Messaging.
@@ -208,7 +225,7 @@ export class Messaging {
      * @param target: Buffer | string either set as routing target as string, or as message ID in reply to (as buffer).
      *  The receiving Messaging instance will check if target matches a msg ID which is waiting for a reply and in such case the message till be emitted on that EventEmitter,
      *  or else it will pass it to the router to see if it matches some route.
-     * @param data: Buffer of data to be sent. Note that data cannot exceed MESSAGE_MAX_BYTES (64 KiB).
+     * @param data: Buffer of data to be sent. Note that data (payload) cannot exceed MESSAGE_MAX_BYTES.
      * @param timeout milliseconds to wait for the first reply (defaults to -1)
      *     -1 means we are not expecting a reply
      *     0 or greater means that we are expecting a reply, 0 means wait forever
@@ -217,16 +234,13 @@ export class Messaging {
      * @param timeoutStream milliseconds to wait for secondary replies, 0 means forever (default).
      *     Only relevant if expecting multiple replies (stream = true).
      * @return SendReturn | undefined
-     *     msgId is always set
-     *     eventEmitter property is set if expecting reply
+     *     SendReturn.msgId is always set
+     *     SendReturn.eventEmitter property is set if expecting reply
+     *     undefined is returned as a silent error when the Messaging is closed and data cannot be sent again on this Messaging instance.
+     * @throws on malformed input
      */
     public send(target: Buffer | string, data?: Buffer, timeout: number = -1, stream: boolean = false, timeoutStream: number = 0): SendReturn | undefined {
-        //if (!this.isOpened) {
-            //console.debug("Messaging is not opened, cannot send");
-            //return undefined;
-        //}
-
-        if (this.isClosed) {
+        if (this._isClosed) {
             console.debug("Messaging is closed, cannot send");
             return undefined;
         }
@@ -238,16 +252,17 @@ export class Messaging {
         data = data ?? Buffer.alloc(0);
 
         if (data.length > MESSAGE_MAX_BYTES) {
-            throw `Data chunk to send cannot exceed ${MESSAGE_MAX_BYTES} bytes. Trying to send ${data.length} bytes`;
+            throw new Error(`Data chunk to send cannot exceed ${MESSAGE_MAX_BYTES} bytes. Trying to send ${data.length} bytes`);
         }
 
         if (target.length > 255) {
-            throw "target length cannot exceed 255 bytes";
+            throw new Error("target length cannot exceed 255 bytes");
         }
 
-        const msgId = this.generateMsgId();
+        const msgId = Messaging.GenerateMsgId();
 
-        const expectingReply = timeout > -1 ? (stream ? ExpectingReply.MULTIPLE : ExpectingReply.SINGLE) : ExpectingReply.NONE;
+        const expectingReply = timeout > -1 ?
+            (stream ? ExpectingReply.MULTIPLE : ExpectingReply.SINGLE) : ExpectingReply.NONE;
 
         const header: Header = {
             version: 0,
@@ -256,7 +271,7 @@ export class Messaging {
             msgId,
             config: expectingReply
         };
-        const headerBuffer = this.encodeHeader(header);
+        const headerBuffer = Messaging.EncodeHeader(header);
         this.outgoingQueue.chunks.push(headerBuffer);
         this.outgoingQueue.chunks.push(data);
         this.isBusyOut++;
@@ -289,7 +304,7 @@ export class Messaging {
      * Default is 10000 (10 sec). 0 means disabled.
      */
     public enablePing(pingInterval: number = 10000) {
-        if (this.isClosed) {
+        if (this._isClosed) {
             return;
         }
 
@@ -320,20 +335,23 @@ export class Messaging {
         return Date.now();
     }
 
-    protected generateMsgId(): Buffer {
-        const msgId = Buffer.from(crypto.randomBytes(4));
+    public static GenerateMsgId(): Buffer {
+        const msgId = Buffer.from(crypto.randomBytes(MSG_ID_LENGTH));
         return msgId;
     }
 
-    protected encodeHeader(header: Header): Buffer {
+    /**
+     * @throws on malformed input
+     */
+    public static EncodeHeader(header: Header): Buffer {
         if (header.target.length > 255) {
-            throw "Target length cannot exceed 255 bytes.";
+            throw new Error("Target length cannot exceed 255 bytes");
         }
-        if (header.msgId.length !== 4) {
-            throw "msgId length must be exactly 4 bytes long.";
+        if (header.msgId.length !== MSG_ID_LENGTH) {
+            throw new Error(`msgId length must be exactly ${MSG_ID_LENGTH} bytes long`);
         }
 
-        const headerLength = 1 + 4 + 1 + 4 + 1 + header.target.length;
+        const headerLength = 1 + 4 + 1 + MSG_ID_LENGTH + 1 + header.target.length;
         const totalLength = headerLength + header.dataLength;
 
         const buffer = Buffer.alloc(headerLength);
@@ -353,23 +371,26 @@ export class Messaging {
         return buffer;
     }
 
-    protected decodeHeader(buffer: Buffer): [Header, Buffer] | undefined {
+    /**
+     * @throws on malformed input
+     */
+    public static DecodeHeader(buffer: Buffer): [Header, Buffer] {
         let pos = 0;
         const version = buffer.readUInt8(pos);
         if (version !== 0) {
-            throw "Unexpected version nr. Only supporting version 0.";
+            throw new Error("Unexpected version nr, only supporting version 0");
         }
         pos++
         const totalLength = buffer.readUInt32LE(pos);
         if (totalLength !== buffer.length) {
-            throw "Mismatch in expected length and provided buffer length.";
+            throw new Error("Mismatch in expected length and provided buffer length");
         }
         pos = pos + 4;
 
         const config = buffer.readUInt8(pos);
         pos++;
-        const msgId = buffer.slice(pos, pos + 4);
-        pos = pos + 4;
+        const msgId = buffer.slice(pos, pos + MSG_ID_LENGTH);
+        pos = pos + MSG_ID_LENGTH;
         const targetLength = buffer.readUInt8(pos);
         pos++;
         const target = buffer.slice(pos, pos + targetLength);
@@ -430,9 +451,11 @@ export class Messaging {
 
     protected getAllEventEmitters(): EventEmitter[] {
         const eventEmitters: EventEmitter[] = [];
-        for (let msgId in this.pendingReply) {
+
+        Object.keys(this.pendingReply).forEach( msgId => {
             eventEmitters.push(this.pendingReply[msgId].eventEmitter);
-        }
+        });
+
         eventEmitters.push(this.eventEmitter);
         return eventEmitters;
     }
@@ -460,10 +483,10 @@ export class Messaging {
      * Notify all pending messages about the close.
      */
     protected socketClose = (hadError: boolean) => {
-        if (this.isClosed) {
+        if (this._isClosed) {
             return;
         }
-        this.isClosed = true;
+        this._isClosed = true;
 
         this.disablePing();
 
@@ -486,13 +509,14 @@ export class Messaging {
      * There is no reply expected on the ping.
      */
     protected sendPing = () => {
-        if (this.isClosed) {
+        if (this._isClosed) {
             return;
         }
 
-        if (this.isOpened) {
-            // Send empty message with an un-routable target.
-            this.send(Buffer.from([0]));
+        if (this._isOpened) {
+            // Send empty ping message.
+            // Not expecting a reply on it.
+            this.send(PING_ROUTE);
         }
 
         if (this.pingInterval > 0) {
@@ -503,10 +527,15 @@ export class Messaging {
     /**
      * Buffer incoming raw data from the socket and process it.
      */
-    protected socketData = (data: Buffer) => {
-        this.incomingQueue.chunks.push(data);
-        this.isBusyIn++;
-        this.processInqueue();
+    protected socketData = (data: Buffer | string) => {
+        if (Buffer.isBuffer(data)) {
+            this.incomingQueue.chunks.push(data);
+            this.isBusyIn++;
+            this.processInqueue();
+        }
+        else {
+            throw new Error("Messaging does not work with text data");
+        }
     }
 
     protected processInqueue = async () => {
@@ -560,12 +589,20 @@ export class Messaging {
                 return true;
             }
 
-            const ret = this.decodeHeader(buffer);
-            if (!ret) {
+            let ret: [Header, Buffer];
+            try {
+                ret = Messaging.DecodeHeader(buffer);
+
+            } catch(e) {
                 this.incomingQueue.chunks.length = 0;
                 console.error("Bad stream detected in header.");
                 return false;
             }
+
+            if (!ret) {
+                return false;
+            }
+
             const [header, data]: [Header, Buffer] = ret;
 
             const inMessage: InMessage = {
@@ -657,6 +694,12 @@ export class Messaging {
                         // Ignore this message
                         return;
                     }
+
+                    if (inMessage.target.toString().toLowerCase() === PING_ROUTE.toLowerCase()) {
+                        // Ignore this message as it is an internal ping message.
+                        return;
+                    }
+
                     const routeEvent: RouteEvent = {
                         target: inMessage.target.toString(),
                         fromMsgId: inMessage.msgId,
@@ -692,7 +735,7 @@ export class Messaging {
      *
      */
     protected checkTimeouts = () => {
-        if (!this.isOpened || this.isClosed) {
+        if (!this._isOpened || this._isClosed) {
             return;
         }
 
@@ -723,10 +766,11 @@ export class Messaging {
     protected getTimeoutedPendingMessages(): SentMessage[] {
         const timeouted: SentMessage[] = [];
         const now = this.getNow();
-        for (let msgId in this.pendingReply) {
+
+        Object.keys(this.pendingReply).forEach( msgId => {
             const sentMessage = this.pendingReply[msgId];
             if (sentMessage.isCleared) {
-                continue;
+                return;
             }
             if (sentMessage.replyCounter === 0) {
                 if (sentMessage.timeout > 0 && now > sentMessage.timestamp + sentMessage.timeout) {
@@ -738,7 +782,8 @@ export class Messaging {
                     timeouted.push(sentMessage);
                 }
             }
-        }
+        });
+
         return timeouted;
     }
 }

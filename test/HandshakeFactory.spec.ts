@@ -225,9 +225,9 @@ export class HandshakeFactoryHandleOnConnect {
             handshakeFactory.triggerEvent = function(name, args) {
                 assert(name == "HANDSHAKE_ERROR" || name == "ERROR");
                 if(args.e && args.e.error) {
-                    assert(args.e.error == "Error: Timeout");
+                    assert(args.e.error == "Error: Socket not instantiated");
                 } else {
-                    assert(args.error == "Error: Timeout");
+                    assert(args.error == "Error: Socket not instantiated");
                 }
             };
 

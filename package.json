@@ -1,6 +1,6 @@
 {
   "name": "pocket-messaging",
-  "version": "2.1.0",
+  "version": "3.0.0",
   "description": "A small cryptographic messaging library written in TypeScript both for browser and nodejs supporting TCP and WebSockets",
   "keywords": [
     "messaging",
@@ -33,19 +33,24 @@
   "scripts": {
     "test": "sh -c 'LOG_FORMAT=\"%c[%L%l] [logging emitted from %m]:%C \" ./node_modules/.bin/testyts'",
     "docs": "./node_modules/.bin/typedoc --entryDocument Home.md --hideBreadcrumbs true --hideInPageTOC true --cleanOutputDir false ./src/*.ts",
-    "c": "./node_modules/.bin/tsc",
+    "build": "./node_modules/.bin/tsc",
+    "tsc": "./node_modules/.bin/tsc",
+    "lint": "npx eslint ./src",
     "prepublishOnly": "tsc"
   },
   "dependencies": {
     "eventemitter3": "^4.0.7",
     "libsodium-wrappers": "^0.7.9",
     "pocket-console": "0.5.0",
-    "pocket-sockets": "2.0.1"
+    "pocket-sockets": "3.0.0"
   },
   "devDependencies": {
     "@tsconfig/node12": "^1.0.7",
     "@types/libsodium-wrappers": "^0.7.9",
     "@types/node": "^14.17.11",
+    "@typescript-eslint/eslint-plugin": "^6.19.1",
+    "@typescript-eslint/parser": "^6.19.1",
+    "eslint": "^8.56.0",
     "testyts": "^1.5.0",
     "ts-node": "^10.2.1",
     "typedoc": "^0.22.15",
