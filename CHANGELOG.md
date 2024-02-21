@@ -1,5 +1,12 @@
 # CHANGELOG: pocket-messaging
 
+## [4.0.0] - 20240221
+Add clockDiff as part of the exchanged data in handshake.  
+Remove sessiondId.  
+No longer auto instantiate Messaging instance on successful handshake, instead return EncryptedClient.  
+Increase MESSAGE\_MAX\_BYTES to 67 KiB.  
+Refactor EncryptedClient.ts to extend pocket-sockets WrappedClient.  
+
 ## [3.0.0] - 20230628
 Narrow return type of Messaging.getClient().  
 Remove box encryption from Messaging (BREAKING).  
