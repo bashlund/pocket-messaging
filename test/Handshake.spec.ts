@@ -40,7 +40,7 @@ export class HandshakeSpec {
             const serverData = Buffer.from("abbbaaa");
             try {
                 const ret = await HandshakeAsServer(this.socket2, this.keyPairServer.secretKey, this.keyPairServer.publicKey, discriminator, allowedClientKey, serverData, 100);
-                console.log("SERVER HANDSHAKE", );
+                //console.log("SERVER HANDSHAKE", );
                 assert(ret.clockDiff < -890);
                 //console.log(`clientLongtermPk: ${ret[0].toString("hex")}`);
                 //console.log(`clientToServerKey: ${ret[1].toString("hex")}`);
@@ -76,9 +76,11 @@ export class HandshakeSpec {
         assert.doesNotThrow(async () => {
             const big = BigInt(9007199254740991n);
             let buffer1 = Buffer.alloc(8);
-            buffer1 = writeUInt64BE(buffer1, big);
+            writeUInt64BE(buffer1, big);
             let buffer2 = Buffer.alloc(8);
             buffer2.writeBigUInt64BE(big);
+            assert(readUInt64BE(buffer1) === big);
+            assert(readUInt64BE(buffer2) === big);
             assert(readUInt64BE(buffer1) == readUInt64BE(buffer2));
             assert(buffer1.readBigUInt64BE() == buffer2.readBigUInt64BE());
             assert(readUInt64BE(buffer1) == buffer2.readBigUInt64BE());
