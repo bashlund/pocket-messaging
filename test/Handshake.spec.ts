@@ -2,7 +2,7 @@ import { TestSuite, Test, AfterAll, BeforeAll, expect } from 'testyts';
 
 import {genKeyPair, init} from "../src/Crypto";
 import {CreatePair, Client} from "pocket-sockets";
-import {HandshakeAsClient, HandshakeAsServer} from "../src/Handshake";
+import {HandshakeAsClient, HandshakeAsServer, writeUInt64BE, readUInt64BE} from "../src/Handshake";
 const assert = require("assert");
 
 type KeyPair = {
@@ -69,5 +69,20 @@ export class HandshakeSpec {
         catch(e) {
             console.error("client got error", e);
         }
+    }
+
+    @Test()
+    public successful_call_writeUInt64BE_readUInt64BE() {
+        assert.doesNotThrow(async () => {
+            const big = BigInt(9007199254740991n);
+            let buffer1 = Buffer.alloc(8);
+            buffer1 = writeUInt64BE(buffer1, big);
+            let buffer2 = Buffer.alloc(8);
+            buffer2.writeBigUInt64BE(big);
+            assert(readUInt64BE(buffer1) == readUInt64BE(buffer2));
+            assert(buffer1.readBigUInt64BE() == buffer2.readBigUInt64BE());
+            assert(readUInt64BE(buffer1) == buffer2.readBigUInt64BE());
+            assert(buffer1.readBigUInt64BE() == readUInt64BE(buffer2));
+        });
     }
 }
