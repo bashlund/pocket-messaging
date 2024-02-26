@@ -5,7 +5,9 @@
         "preserveConstEnums": true,
         "outDir": "build",
         "module": "commonjs",
-        "declaration": true
+        "declaration": true,
+        "target": "es2020",
+        "esModuleInterop": true
     },
     "files": [
         "./index.ts"

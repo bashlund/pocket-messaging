@@ -1,7 +1,13 @@
 /**
- * A four way client-server handshake, as excellently described in https://ssbc.github.io/scuttlebutt-protocol-guide/,
- * with one added version byte and functionality to mitigate ddos attacks,
- * and added client/server data exchange for swapping application parameters.
+ * A four way client-server handshake, as excellently described in
+ * https://ssbc.github.io/scuttlebutt-protocol-guide/ with a few additions:
+ *
+ * This protocols has one added version byte, one added difficulty byte, 4 byte added nonce bytes,
+ * and a 6 byte added clock timestamp and added optional client/server data exchange for
+ * swapping application parameters of default maximum 2048 bytes.
+ *
+ * The added difficulty byte can be used to force the client to calculate a nonce to match the
+ * difficulty level set by the server for the handshake to complete.
  */
 
 import sodium from "libsodium-wrappers";
@@ -17,7 +23,32 @@ type KeyPair = {
 };
 
 // Single byte depicting the version of the handshake protocol.
-const Version = Buffer.from([0]);
+const Version = Buffer.from([1]);
+
+export function writeUInt64BE(target: Buffer, nr: BigInt) {
+    if (typeof(nr) !== "bigint") {
+        throw new Error("expecting nr type bigint");
+    }
+    if (nr < BigInt(0) || nr > 0xffffffffffffffffn) {
+        throw new Error("64 bit integer out of bounds");
+    }
+
+    const binary = nr.toString(2).padStart(64, "0");
+    const msb32 = parseInt(binary.slice(0, 32), 2);
+    const lsb32 = parseInt(binary.slice(32), 2);
+
+    target.writeUInt32BE(msb32, 0);
+    target.writeUInt32BE(lsb32, 4);
+}
+
+export function readUInt64BE(source: Buffer): BigInt {
+    const high32b = source.readUInt32BE(0);
+    const low32b  = source.readUInt32BE(4);
+    const binary  = high32b.toString(2).padStart(32, "0") + low32b.toString(2).padStart(32, "0");
+    const value = BigInt("0b" + binary);
+
+    return value;
+}
 
 // Compare two buffers in constant time
 function Equals(a: Buffer, b: Buffer): boolean {
@@ -253,7 +284,7 @@ function message3(detachedSigA: Buffer, nonce: Buffer, discriminator: Buffer,
     }
 
     let packedClientClock = Buffer.alloc(8);
-    packedClientClock.writeBigInt64BE(BigInt(clientClock), 0);
+    writeUInt64BE(packedClientClock, BigInt(clientClock));
     packedClientClock = packedClientClock.slice(2);  // remove first two empty bytes
 
     const message = Buffer.concat([detachedSigA, nonce, clientLongtermPk, packedClientClock, clientData]);
@@ -312,7 +343,7 @@ function verifyMessage3(msg3: Buffer, serverLongtermPk: Buffer, discriminator: B
         throw new Error("Signature does not match");
     }
 
-    const clientClock = Number(Buffer.concat([Buffer.alloc(2), packedClientClock]).readBigInt64BE(0));
+    const clientClock = Number(readUInt64BE(Buffer.concat([Buffer.alloc(2), packedClientClock])));
 
     return [nonce, clientLongtermPk, detachedSigA, clientClock, clientData];
 }
@@ -361,7 +392,7 @@ function message4(discriminator: Buffer, detachedSigA: Buffer, clientLongtermPk:
     }
 
     let packedServerClock = Buffer.alloc(8);
-    packedServerClock.writeBigInt64BE(BigInt(serverClock), 0);
+    writeUInt64BE(packedServerClock, BigInt(serverClock));
     packedServerClock = packedServerClock.slice(2);  // remove first two empty bytes
 
     const detachedSigB = signDetached(Buffer.concat([discriminator, detachedSigA, clientLongtermPk, hashFn(sharedSecret_ab)]), serverLongtermSk);
@@ -422,14 +453,14 @@ function verifyMessage4(msg4: Buffer, detachedSigA: Buffer, clientLongtermPk: Bu
 
     const unboxed = secretBoxOpen(ciphertext, boxNonce, key);
     const detachedSigB = unboxed.slice(0, 64);
-    const serverClockPacked = unboxed.slice(64, 70);
+    const packedServerClock = unboxed.slice(64, 70);
     const serverData = unboxed.slice(70);
     const msg = Buffer.concat([discriminator, detachedSigA, clientLongtermPk, hashFn(sharedSecret_ab)]);
     if (!signVerifyDetached(msg, detachedSigB, serverLongtermPk)) {
         throw new Error("Signature does not match");
     }
 
-    const serverClock = Number(Buffer.concat([Buffer.alloc(2), serverClockPacked]).readBigInt64BE(0));
+    const serverClock = Number(readUInt64BE(Buffer.concat([Buffer.alloc(2), packedServerClock])));
 
     return [serverClock, serverData];
 }
