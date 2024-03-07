@@ -126,7 +126,7 @@ export class MessagingSpec {
 
         process.nextTick( () => {
             //@ts-ignore protected function
-            this.messaging1.socketError(Buffer.from("hello"));
+            this.messaging1.emitError(Buffer.from("hello"));
         });
 
         let accept: Function;

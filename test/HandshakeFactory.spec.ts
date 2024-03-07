@@ -79,10 +79,7 @@ export class HandshakeFactoryHandleOnConnect {
             const clientSocket = new TCPClient(handshakeFactory.getHandshakeFactoryConfig().socketFactoryConfig.client.clientOptions);
 
             //@ts-ignore
-            const callback = await handshakeFactory.handleOnConnect({
-                client: clientSocket,
-                isServer: false
-            });
+            const callback = await handshakeFactory.handleOnConnect(clientSocket, /*isServer=*/ false);
         });
     }
 
@@ -124,10 +121,7 @@ export class HandshakeFactoryHandleOnConnect {
             const clientSocket = new TCPClient(handshakeFactory.getHandshakeFactoryConfig().socketFactoryConfig.client.clientOptions);
 
             //@ts-ignore
-            const callback = await handshakeFactory.handleOnConnect({
-                client: clientSocket,
-                isServer: true
-            });
+            const callback = await handshakeFactory.handleOnConnect(clientSocket, /*isServer=*/ true);
         });
     }
 
@@ -174,10 +168,7 @@ export class HandshakeFactoryHandleOnConnect {
             };
 
             //@ts-ignore
-            const callback = await handshakeFactory.handleOnConnect({
-                client: clientSocket,
-                isServer: false
-            });
+            const callback = await handshakeFactory.handleOnConnect(clientSocket, /*isServer=*/ false);
 
             //@ts-ignore
             assert(clientSocketCloseCalled == true);
@@ -222,20 +213,20 @@ export class HandshakeFactoryHandleOnConnect {
             const clientSocket = new TCPClient(handshakeFactory.getHandshakeFactoryConfig().socketFactoryConfig.client.clientOptions);
 
             //@ts-ignore
-            handshakeFactory.triggerEvent = function(name, args) {
+            handshakeFactory.triggerEvent = function(name, ...args: any[]) {
                 assert(name == "HANDSHAKE_ERROR" || name == "ERROR");
-                if(args.e && args.e.error) {
-                    assert(args.e.error == "Error: Socket not instantiated");
-                } else {
-                    assert(args.error == "Error: Socket not instantiated");
+
+                if (name === "HANDSHAKE_ERROR") {
+                    assert(args[0].message == "Socket not instantiated");
+                }
+                else {
+                    assert(args[0] == "HANDSHAKE_ERROR");
+                    assert(args[1][0].message == "Socket not instantiated");
                 }
             };
 
             //@ts-ignore
-            const callback = await handshakeFactory.handleOnConnect({
-                client: clientSocket,
-                isServer: false
-            });
+            const callback = await handshakeFactory.handleOnConnect(clientSocket, /*isServer=*/ false);
         });
     }
 }

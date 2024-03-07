@@ -1,15 +1,19 @@
 import {
     SocketFactory,
-    ConnectCallback,
+    SocketFactoryConnectCallback,
+    ClientInterface,
 } from "pocket-sockets";
 
 import {
     HandshakeFactoryConfig,
     HandshakeResult,
     HandshakeFactoryInterface,
-    EVENTS,
-    HandshakeCallback,
-    HandshakeErrorCallback,
+    HandshakeFactoryHandshakeCallback,
+    HandshakeFactoryHandshakeErrorCallback,
+    HandshakeFactoryPublicKeyOverflowCallback,
+    EVENT_HANDSHAKEFACTORY_HANDSHAKE_ERROR,
+    EVENT_HANDSHAKEFACTORY_HANDSHAKE,
+    EVENT_HANDSHAKEFACTORY_PUBLICKEY_OVERFLOW,
 } from "./types";
 
 import {
@@ -55,14 +59,14 @@ export class HandshakeFactory extends SocketFactory implements HandshakeFactoryI
         return false;
     }
 
-    protected handleOnConnect: ConnectCallback = async (e) => {
+    protected handleOnConnect: SocketFactoryConnectCallback = async (client: ClientInterface, isServer: boolean) => {
         try {
             let handshakeResult: HandshakeResult;
 
             let peerData: Buffer | undefined;
 
             if (typeof this.handshakeFactoryConfig.peerData === "function") {
-                peerData = this.handshakeFactoryConfig.peerData(e.isServer);
+                peerData = this.handshakeFactoryConfig.peerData(isServer);
             }
             else {
                 peerData = this.handshakeFactoryConfig.peerData;
@@ -70,14 +74,14 @@ export class HandshakeFactory extends SocketFactory implements HandshakeFactoryI
 
             let encryptedClient: EncryptedClient | undefined;
 
-            if (e.isServer) {
-                handshakeResult = await HandshakeAsServer(e.client,
+            if (isServer) {
+                handshakeResult = await HandshakeAsServer(client,
                     this.handshakeFactoryConfig.keyPair.secretKey,
                     this.handshakeFactoryConfig.keyPair.publicKey,
                     this.handshakeFactoryConfig.discriminator,
                     this.handshakeFactoryConfig.allowedClients, peerData);
 
-                encryptedClient = new EncryptedClient(e.client,
+                encryptedClient = new EncryptedClient(client,
                     handshakeResult.serverToClientKey,
                     handshakeResult.serverNonce,
                     handshakeResult.clientToServerKey,
@@ -86,17 +90,17 @@ export class HandshakeFactory extends SocketFactory implements HandshakeFactoryI
             }
             else {
                 if (!this.handshakeFactoryConfig.serverPublicKey) {
-                    e.client.close();
+                    client.close();
                     return;
                 }
 
-                handshakeResult = await HandshakeAsClient(e.client,
+                handshakeResult = await HandshakeAsClient(client,
                     this.handshakeFactoryConfig.keyPair.secretKey,
                     this.handshakeFactoryConfig.keyPair.publicKey,
                     this.handshakeFactoryConfig.serverPublicKey,
                     this.handshakeFactoryConfig.discriminator, peerData);
 
-                encryptedClient = new EncryptedClient(e.client,
+                encryptedClient = new EncryptedClient(client,
                     handshakeResult.clientToServerKey,
                     handshakeResult.clientNonce,
                     handshakeResult.serverToClientKey,
@@ -109,30 +113,40 @@ export class HandshakeFactory extends SocketFactory implements HandshakeFactoryI
             }
 
             const publicKeyStr = handshakeResult.peerLongtermPk.toString("hex");
+
             if (this.checkClientsOverflow(publicKeyStr)) {
-                this.triggerEvent(EVENTS.CLIENT_REFUSE.name,
-                    {reason: EVENTS.CLIENT_REFUSE.reason.PUBLICKEY_OVERFLOW,
-                        key: handshakeResult.peerLongtermPk});
+
+                const publicKeyOverflowEvent: Parameters<HandshakeFactoryPublicKeyOverflowCallback> =
+                    [handshakeResult.peerLongtermPk];
+
+                this.triggerEvent(EVENT_HANDSHAKEFACTORY_PUBLICKEY_OVERFLOW,
+                    ...publicKeyOverflowEvent);
+
+                client.close();
 
                 return;
             }
 
             this.increaseClientsCounter(publicKeyStr);
 
-            e.client.onClose( () => {
+            client.onClose( () => {
                 this.decreaseClientsCounter(publicKeyStr);
             });
 
-            this.triggerEvent(EVENTS.HANDSHAKE.name, {isServer: e.isServer, handshakeResult,
-                client: e.client, wrappedClient: encryptedClient});
+            const handshakeEvent: Parameters<HandshakeFactoryHandshakeCallback> =
+                [isServer, client, encryptedClient, handshakeResult];
+
+            this.triggerEvent(EVENT_HANDSHAKEFACTORY_HANDSHAKE,
+                ...handshakeEvent);
         }
         catch(error) {
-            this.triggerEvent(EVENTS.HANDSHAKE_ERROR.name, {error, client: e.client});
+            const handshakeErrorEvent: Parameters<HandshakeFactoryHandshakeErrorCallback> =
+                [error as Error];
 
-            this.triggerEvent(EVENTS.ERROR.name, {eventName: EVENTS.HANDSHAKE_ERROR,
-                e: {error, client: e.client}});
+            this.triggerEvent(EVENT_HANDSHAKEFACTORY_HANDSHAKE_ERROR,
+                ...handshakeErrorEvent);
 
-            e.client.close();
+            client.close();
         }
     }
 
@@ -191,11 +205,19 @@ export class HandshakeFactory extends SocketFactory implements HandshakeFactoryI
         return false;
     }
 
-    public onHandshakeError(callback: HandshakeErrorCallback) {
-        this.hookEvent(EVENTS.HANDSHAKE_ERROR.name, callback);
+    /**
+     * Detect specific error in the handshake process.
+     * This error is also emitted on the general onError event hook provided by SocketFactory.
+     */
+    public onHandshakeError(callback: HandshakeFactoryHandshakeErrorCallback) {
+        this.hookEvent(EVENT_HANDSHAKEFACTORY_HANDSHAKE_ERROR, callback);
     }
 
-    public onHandshake(callback: HandshakeCallback) {
-        this.hookEvent(EVENTS.HANDSHAKE.name, callback);
+    public onHandshake(callback: HandshakeFactoryHandshakeCallback) {
+        this.hookEvent(EVENT_HANDSHAKEFACTORY_HANDSHAKE, callback);
+    }
+
+    public onPublicKeyOverflow(callback: HandshakeFactoryPublicKeyOverflowCallback) {
+        this.hookEvent(EVENT_HANDSHAKEFACTORY_PUBLICKEY_OVERFLOW, callback);
     }
 }
