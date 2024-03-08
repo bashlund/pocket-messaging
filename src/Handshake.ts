@@ -25,7 +25,7 @@ type KeyPair = {
 // Single byte depicting the version of the handshake protocol.
 const Version = Buffer.from([1]);
 
-export function writeUInt64BE(target: Buffer, nr: BigInt) {
+export function writeUInt64BE(target: Buffer, nr: bigint) {
     if (typeof(nr) !== "bigint") {
         throw new Error("expecting nr type bigint");
     }
@@ -41,7 +41,7 @@ export function writeUInt64BE(target: Buffer, nr: BigInt) {
     target.writeUInt32BE(lsb32, 4);
 }
 
-export function readUInt64BE(source: Buffer): BigInt {
+export function readUInt64BE(source: Buffer): bigint {
     const high32b = source.readUInt32BE(0);
     const low32b  = source.readUInt32BE(4);
     const binary  = high32b.toString(2).padStart(32, "0") + low32b.toString(2).padStart(32, "0");

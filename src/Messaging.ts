@@ -12,6 +12,7 @@ import {
     ReplyEvent,
     TimeoutEvent,
     ErrorEvent,
+    PongEvent,
     AnyEvent,
     CloseEvent,
     EventType,
@@ -21,6 +22,7 @@ import {
     DEFAULT_PING_INTERVAL,
     MSG_ID_LENGTH,
     PING_ROUTE,
+    PONG_ROUTE,
 } from "./types";
 
 import {
@@ -74,6 +76,9 @@ export class Messaging {
     /** Milliseconds to wait between each ping. */
     protected pingInterval: number;
 
+    /** Keep track of pending ping, pong resets it. */
+    protected pingTimestamp: number = 0;
+
     /**
      * How many messages we allow through.
      * 0 means cork it up
@@ -107,7 +112,7 @@ export class Messaging {
             chunks: [],
         };
         this.eventEmitter = new EventEmitter();
-        this.socket.onError(this.socketError);
+        this.socket.onError( (error) => this.emitError(error) );
         this.socket.onClose(this.socketClose);
     }
 
@@ -311,6 +316,7 @@ export class Messaging {
         this.disablePing();
 
         this.pingInterval = pingInterval;
+        this.pingTimestamp = 0;  // reset
 
         if (this.pingInterval > 0) {
             this.pingTimeout = setTimeout( this.sendPing, this.pingInterval );
@@ -321,6 +327,7 @@ export class Messaging {
         if (this.pingTimeout) {
             clearTimeout(this.pingTimeout);
             this.pingTimeout = undefined;
+            this.pingTimestamp = 0;
         }
     }
 
@@ -461,21 +468,25 @@ export class Messaging {
     }
 
     /**
-     * Notify all pending messages and the main emitter about the error.
+     * Notify all pending messages and the main emitter about an error.
+     *
+     * @param message the error message
      *
      */
-    protected socketError = (error: string) => {
+    protected emitError = (message: string) => {
         const eventEmitters = this.getAllEventEmitters();
 
         const errorEvent: ErrorEvent = {
-            error
+            error: message
         };
+
         this.emitEvent(eventEmitters, EventType.ERROR, errorEvent);
 
         const anyEvent: AnyEvent = {
             type: EventType.ERROR,
             event: errorEvent
         };
+
         this.emitEvent(eventEmitters, EventType.ANY, anyEvent);
     }
 
@@ -509,13 +520,25 @@ export class Messaging {
      * There is no reply expected on the ping.
      */
     protected sendPing = () => {
-        if (this._isClosed) {
+        if (this._isClosed || this.pingInterval === 0) {
             return;
         }
 
         if (this._isOpened) {
+            if (this.pingTimestamp > 0) {
+                console.debug("Pong message not received in time, closing.");
+
+                this.emitError("Messaging ping/pong timeouted, closing");
+
+                this.close();
+
+                return
+            }
+
+            this.pingTimestamp = Date.now();
+
             // Send empty ping message.
-            // Not expecting a reply on it.
+            // Not expecting a traditional reply on it.
             this.send(PING_ROUTE);
         }
 
@@ -662,14 +685,17 @@ export class Messaging {
                         data: inMessage.data,
                         expectingReply: inMessage.expectingReply
                     };
+
                     this.emitEvent([pendingReply.eventEmitter],
-                                   EventType.REPLY, replyEvent);
+                        EventType.REPLY, replyEvent);
+
                     const anyEvent: AnyEvent = {
                         type: EventType.REPLY,
                         event: replyEvent
                     };
+
                     this.emitEvent([pendingReply.eventEmitter],
-                                   EventType.ANY, anyEvent);
+                        EventType.ANY, anyEvent);
                 }
                 else {
                     // This is not a reply message (or the message was cancelled).
@@ -696,7 +722,26 @@ export class Messaging {
                     }
 
                     if (inMessage.target.toString().toLowerCase() === PING_ROUTE.toLowerCase()) {
-                        // Ignore this message as it is an internal ping message.
+                        // Send empty pong message.
+                        // Not expecting a reply on this.
+                        this.send(PONG_ROUTE);
+
+                        return;
+                    }
+                    else if (inMessage.target.toString().toLowerCase() === PONG_ROUTE.toLowerCase()) {
+                        const roundTripTime = Date.now() - this.pingTimestamp;
+
+                        // Reset flag to avoid automatic timeout and close.
+                        this.pingTimestamp = 0;
+
+                        // emit event
+                        const pongEvent: PongEvent = {
+                            roundTripTime,
+                        };
+
+                        this.emitEvent([this.eventEmitter],
+                            EventType.PONG, pongEvent);
+
                         return;
                     }
 
@@ -706,8 +751,9 @@ export class Messaging {
                         data: inMessage.data,
                         expectingReply: inMessage.expectingReply
                     };
+
                     this.emitEvent([this.eventEmitter],
-                                   EventType.ROUTE, routeEvent);
+                        EventType.ROUTE, routeEvent);
                 }
             }
         }
@@ -750,14 +796,17 @@ export class Messaging {
             const sentMessage = timeouted[index];
             const timeoutEvent: TimeoutEvent = {
             };
+
             this.emitEvent([sentMessage.eventEmitter],
-                           EventType.TIMEOUT, timeoutEvent);
+                EventType.TIMEOUT, timeoutEvent);
+
             const anyEvent: AnyEvent = {
                 type: EventType.TIMEOUT,
                 event: timeoutEvent
             };
+
             this.emitEvent([sentMessage.eventEmitter],
-                           EventType.ANY, anyEvent);
+                EventType.ANY, anyEvent);
         }
 
         setTimeout(this.checkTimeouts, 500);

@@ -8,14 +8,13 @@ import {
     WrappedClientInterface,
 } from "pocket-sockets";
 
-import {EVENTS as SOCKETFACTORY_EVENTS} from "pocket-sockets";
-
 export const DEFAULT_PING_INTERVAL = 10000;  // Milliseconds.
 
 /** Msg ID length in bytes. */
 export const MSG_ID_LENGTH = 4;
 
 export const PING_ROUTE = "_ping";
+export const PONG_ROUTE = "_pong";
 
 /**
  * A single message cannot exceed 67 KiB in total for its payload.
@@ -123,6 +122,10 @@ export type CloseEvent = {
     hadError: boolean
 };
 
+export type PongEvent = {
+    roundTripTime: number,
+};
+
 export enum EventType {
     /**
      * Data event only emitted on main event emitter on new
@@ -161,6 +164,12 @@ export enum EventType {
      * This is useful for having a catch-all event handler when waiting on replies.
      */
     ANY = "any",
+
+    /**
+     * Event emitted only on main event emitter when a ping has received its pong message.
+     * It provides the round-time in milliseconds as data.
+     */
+    PONG = "ping",
 }
 
 export type HandshakeResult = {
@@ -231,46 +240,39 @@ export type HandshakeFactoryConfig = {
     pingInterval?: number,
 };
 
-/**
- * Extend EVENTS from SocketFactory.
- * Add event HANDSHAKE_ERROR with the callback signature HandshakeErrorCallback.
- * Add "HANDSHAKE_ERROR" to ERROR.subEvents.
- */
-export const EVENTS = {
-    ...SOCKETFACTORY_EVENTS,
-    ERROR: {
-        ...SOCKETFACTORY_EVENTS.ERROR,
-        subEvents: [...SOCKETFACTORY_EVENTS.ERROR.subEvents, "HANDSHAKE_ERROR"],
-    },
-    HANDSHAKE: {
-        name: "HANDSHAKE",
-    },
-    HANDSHAKE_ERROR: {
-        name: "HANDSHAKE_ERROR",
-    },
-    CLIENT_REFUSE: {
-        ...SOCKETFACTORY_EVENTS.CLIENT_REFUSE,
-        reason: {
-            ...SOCKETFACTORY_EVENTS.CLIENT_REFUSE.reason,
-            PUBLICKEY_OVERFLOW: "PUBLICKEY_OVERFLOW",
-        }
-    },
-};
+export const EVENT_HANDSHAKEFACTORY_HANDSHAKE = "HANDSHAKE";
+export const EVENT_HANDSHAKEFACTORY_HANDSHAKE_ERROR = "HANDSHAKE_ERROR";
+export const EVENT_HANDSHAKEFACTORY_PUBLICKEY_OVERFLOW = "PUBLICKEY_OVERFLOW";
+
+export type HandshakeFactoryPublicKeyOverflowCallback = (publicKey: Buffer) => void;
 
 /**
  * Event emitted when client is successfully handshaked and setup for encryption.
  * The client returned is the original client socket. 
  * The wrappedClient is prepared for being used with encryption but it must be called
- * with await init() before using, if using.
+ * with await init() before using, if wanting to the encrypted client.
  */
-export type HandshakeCallback = (e: {isServer: boolean, client: ClientInterface,
-    wrappedClient: WrappedClientInterface, handshakeResult: HandshakeResult}) => void;
+export type HandshakeFactoryHandshakeCallback = (isServer: boolean, client: ClientInterface,
+    wrappedClient: WrappedClientInterface, handshakeResult: HandshakeResult) => void;
 
-/** Event emitted when client could not handshake. */
-export type HandshakeErrorCallback = (e: {error: Error, client: ClientInterface}) => void;
+/**
+ * Event emitted when client could not handshake.
+ * An error occurred in the handshake process (the Error provided).
+ */
+export type HandshakeFactoryHandshakeErrorCallback = (error: Error) => void;
 
 export interface HandshakeFactoryInterface extends SocketFactoryInterface {
     getHandshakeFactoryConfig(): HandshakeFactoryConfig;
-    onHandshakeError(callback: HandshakeErrorCallback): void;
-    onHandshake(callback: HandshakeCallback): void;
+
+    /** A successful handshake. */
+    onHandshake(callback: HandshakeFactoryHandshakeCallback): void;
+
+    /** An error in the handshake process, could be wrong key, wrong protocol format, etc. Unrecoverable. */
+    onHandshakeError(callback: HandshakeFactoryHandshakeErrorCallback): void;
+
+    /**
+     * Too many connections detected for specific connected peer public key.
+     * The connection is closed and this event triggered.
+     */
+    onPublicKeyOverflow(callback: HandshakeFactoryPublicKeyOverflowCallback): void;
 }

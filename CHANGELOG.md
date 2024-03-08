@@ -1,5 +1,9 @@
 # CHANGELOG: pocket-messaging
 
+## [5.0.0] - 20240226
+Update embedded protocol version byte.  
+Polyfill bigint packing to work with webpack.  
+
 ## [4.0.0] - 20240221
 Add clockDiff as part of the exchanged data in handshake.  
 Remove sessiondId.  

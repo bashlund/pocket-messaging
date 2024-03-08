@@ -11,6 +11,8 @@ import {
  *
  */
 export class EncryptedClient extends WrappedClient {
+    protected handlers: {[type: string]: ((data?: any) => void)[]} = {};
+
     protected incomingData: Buffer;
 
     constructor(client: ClientInterface,
@@ -99,4 +101,24 @@ export class EncryptedClient extends WrappedClient {
             throw new Error("EncryptedClient does not work with text data");
         }
     };
+
+    protected hookEvent(type: string, callback: (...args: any[]) => void) {
+        const cbs = this.handlers[type] || [];
+        this.handlers[type] = cbs;
+        cbs.push(callback);
+    }
+
+    protected unhookEvent(type: string, callback: (...args: any[]) => void) {
+        const cbs = (this.handlers[type] || []).filter( (cb: (data?: any[]) => void) =>
+            callback !== cb );
+
+        this.handlers[type] = cbs;
+    }
+
+    protected triggerEvent(type: string, ...args: any[]) {
+        const cbs = this.handlers[type] || [];
+        cbs.forEach( callback => {
+            callback(...args);
+        });
+    }
 }
