@@ -1,5 +1,9 @@
 # CHANGELOG: pocket-messaging
 
+## [6.0.0] - 20240308
+Improve overall event handling.  
+Add ping-pong in Messaging to better detect silent disconnects.  
+
 ## [5.0.0] - 20240226
 Update embedded protocol version byte.  
 Polyfill bigint packing to work with webpack.  
