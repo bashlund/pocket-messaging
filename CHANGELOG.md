@@ -1,5 +1,8 @@
 # CHANGELOG: pocket-messaging
 
+## [6.0.1] - 20240409
+Bugfix: close timeout on close to properly end Messaging instance.  
+
 ## [6.0.0] - 20240308
 Improve overall event handling.  
 Add ping-pong in Messaging to better detect silent disconnects.  

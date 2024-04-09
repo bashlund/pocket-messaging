@@ -1,6 +1,6 @@
 {
   "name": "pocket-messaging",
-  "version": "6.0.0",
+  "version": "6.0.1",
   "description": "A small cryptographic messaging library written in TypeScript both for browser and nodejs supporting TCP and WebSockets",
   "keywords": [
     "messaging",
