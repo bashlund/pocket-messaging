@@ -206,6 +206,9 @@ export class Messaging {
         if (this._isClosed) {
             return;
         }
+
+        this.disablePing();
+
         // Note the socket was already open when it was passed into Messaging.
         this.socket?.close();
     }
@@ -324,9 +327,11 @@ export class Messaging {
     }
 
     public disablePing() {
-        if (this.pingTimeout) {
+        if (this.pingTimeout !== undefined) {
             clearTimeout(this.pingTimeout);
+
             this.pingTimeout = undefined;
+
             this.pingTimestamp = 0;
         }
     }
@@ -532,7 +537,7 @@ export class Messaging {
 
                 this.close();
 
-                return
+                return;
             }
 
             this.pingTimestamp = Date.now();
